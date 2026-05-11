@@ -1,25 +1,64 @@
 {
   "expo": {
     "name": "Savdo",
-    "slug": "savdo-mobile",
+    "slug": "savdo",
+    "scheme": "savdo",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "assetBundlePatterns": ["**/*"],
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "sdkVersion": "55.0.0",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#16a34a"
+    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.savdo.pos"
+      "bundleIdentifier": "uz.savdo.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#16a34a"
       },
-      "package": "com.savdo.pos",
+      "package": "uz.savdo.app",
       "permissions": [
-        "ACCESS_NETWORK_STATE",
-        "INTERNET"
+        "NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "CAMERA"
       ]
     },
-    "plugins": []
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow Savdo to use Face ID."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.24"
+          }
+        }
+      ],
+      "expo-sqlite",
+      "expo-sharing",
+      "expo-camera"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e80f6f2e-e86b-494c-a8fd-f17460c0d1ad"
+      }
+    },
+    "owner": "s1t"
   }
 }

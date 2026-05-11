@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native builds
+android/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+
+# Env
+.env
+.env.local
+
+# @generated expo-cli sync-2b81b286409207a5da26e14c78851eb30d8ccbdb
+expo-env.d.ts
+# @end expo-cli
