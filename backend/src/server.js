@@ -29,10 +29,13 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
 
 // Production da frontend backend bilan bir serverda — CORS faqat dev uchun
 if (process.env.NODE_ENV !== 'production') {
+  // Dev: localhost va 127.0.0.1 (har qanday port) ga avtomatik ruxsat — vite proxy ba'zan 127.0.0.1 sifatida keladi
+  const isLocalOrigin = (origin) =>
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
   app.use(
     cors({
       origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || allowedOrigins.includes(origin) || isLocalOrigin(origin)) {
           callback(null, true);
         } else {
           callback(new Error(`CORS policy: Origin ${origin} not allowed`));
