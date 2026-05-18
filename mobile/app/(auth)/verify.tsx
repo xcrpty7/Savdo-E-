@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/hooks/useT";
-import { dark } from "@/theme/colors";
+import { useTheme } from "@/hooks/useTheme";
 
 const DEMO_CODE = "000000";
 
@@ -15,7 +15,7 @@ export default function VerifyScreen() {
   const [loading, setLoading] = useState(false);
   const setToken = useAuthStore((s) => s.setToken);
   const t = useT();
-  const c = dark;
+  const { c } = useTheme();
 
   async function handleVerify() {
     if (code.length !== 6) return;

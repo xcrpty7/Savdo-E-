@@ -37,6 +37,26 @@ async function shareReceipt(result: SaleResult) {
   } catch {}
 }
 
+function generateReceiptLink(result: SaleResult): string {
+  const unitPrice = result.qty > 0 ? Math.round(result.totalAmount / result.qty) : 0;
+  const data = JSON.stringify({
+    n: result.name,
+    q: result.qty,
+    p: unitPrice,
+    a: result.totalAmount,
+    d: new Date().toISOString().slice(0, 10),
+  });
+  const encoded = btoa(unescape(encodeURIComponent(data)));
+  return `https://savdo.uz/r/${encoded}`;
+}
+
+async function shareReceiptLink(result: SaleResult) {
+  try {
+    const link = generateReceiptLink(result);
+    await Share.share({ message: link, title: "Savdo cheki havolasi" });
+  } catch {}
+}
+
 export default function AddSaleScreen() {
   const t = useT();
   const { c } = useTheme();
@@ -101,13 +121,13 @@ export default function AddSaleScreen() {
     doSale();
   }
 
-  function handleBarcodeScanned(barcode: string) {
+  function handleBarcodeScanned(code: string) {
     setShowScanner(false);
-    const found = allProducts.find((p) => p.name === barcode || p.serverId === barcode);
+    const found = allProducts.find((p) => p.barcode === code || p.name === code);
     if (found) {
       setSelected(found);
     } else {
-      setSearch(barcode);
+      setSearch(code);
     }
   }
 
@@ -152,10 +172,19 @@ export default function AddSaleScreen() {
         {/* Chek share */}
         <TouchableOpacity
           onPress={() => shareReceipt(result)}
-          style={{ backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 16, height: 54, width: "100%", alignItems: "center", justifyContent: "center", marginBottom: 12, flexDirection: "row", gap: 8 }}
+          style={{ backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 16, height: 54, width: "100%", alignItems: "center", justifyContent: "center", marginBottom: 8, flexDirection: "row", gap: 8 }}
         >
           <Ionicons name="share-social" size={20} color={c.bg} />
           <Text style={{ color: c.bg, fontWeight: "700", fontSize: 15 }}>{t.sales.shareReceipt}</Text>
+        </TouchableOpacity>
+
+        {/* Receipt link */}
+        <TouchableOpacity
+          onPress={() => shareReceiptLink(result)}
+          style={{ backgroundColor: "rgba(255,255,255,0.10)", borderRadius: 16, height: 54, width: "100%", alignItems: "center", justifyContent: "center", marginBottom: 12, flexDirection: "row", gap: 8, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)" }}
+        >
+          <Ionicons name="link" size={20} color={c.bg} />
+          <Text style={{ color: c.bg, fontWeight: "700", fontSize: 15 }}>{t.sales.shareLink}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

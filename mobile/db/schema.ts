@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export const schema = appSchema({
-  version: 3,
+  version: 4,
   tables: [
     tableSchema({
       name: "products",
@@ -11,6 +11,7 @@ export const schema = appSchema({
         { name: "sell_price", type: "number" },
         { name: "stock_qty", type: "number" },
         { name: "unit", type: "string" },
+        { name: "barcode", type: "string", isOptional: true },
         { name: "category_id", type: "string", isOptional: true },
         { name: "archived_at", type: "number", isOptional: true },
         { name: "is_synced", type: "boolean" },

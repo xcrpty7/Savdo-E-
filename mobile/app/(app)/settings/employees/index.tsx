@@ -63,8 +63,8 @@ export default function EmployeesScreen() {
       />
 
       <TouchableOpacity
-        style={{ position: "absolute", bottom: 28, right: 20, backgroundColor: c.primary, width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", shadowColor: c.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 }}
-        onPress={() => router.push("/(app)/settings/employees/add")}
+        style={{ position: "absolute", bottom: 28, right: 20, backgroundColor: c.primary, width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", shadowColor: c.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8, zIndex: 10 }}
+        onPress={() => router.push("/settings/employees/add")}
       >
         <Ionicons name="add" size={30} color="#fff" />
       </TouchableOpacity>

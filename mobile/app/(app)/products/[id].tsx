@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Modal } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { database } from "@/db";
@@ -34,8 +34,10 @@ export default function ProductDetailScreen() {
   const [buyPrice, setBuyPrice] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [saving, setSaving] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -44,6 +46,7 @@ export default function ProductDetailScreen() {
       setBuyPrice(String(product.buyPrice));
       setSellPrice(String(product.sellPrice));
       setStock(String(product.stockQty));
+      setBarcode(product.barcode ?? "");
       initialized.current = true;
     }
   }, [product]);
@@ -85,6 +88,7 @@ export default function ProductDetailScreen() {
           p.buyPrice = Number(buyPrice);
           p.sellPrice = Number(sellPrice);
           p.stockQty = Number(stock);
+          p.barcode = barcode.trim() || null;
           p.isSynced = false;
         });
       });
@@ -96,28 +100,16 @@ export default function ProductDetailScreen() {
     }
   }
 
-  function handleDelete() {
-    Alert.alert(
-      t.products.delete,
-      "Bu tovarni butunlay o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.",
-      [
-        { text: t.products.cancel, style: "cancel" },
-        {
-          text: t.products.delete,
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await database.write(async () => {
-                await product.destroyPermanently();
-              });
-              router.back();
-            } catch {
-              Alert.alert(t.common.error, "O'chirishda xato yuz berdi");
-            }
-          },
-        },
-      ]
-    );
+  async function confirmDelete() {
+    setShowDeleteModal(false);
+    try {
+      await database.write(async () => {
+        await product.destroyPermanently();
+      });
+      router.back();
+    } catch {
+      Alert.alert(t.common.error, "O'chirishda xato yuz berdi");
+    }
   }
 
   const profit = Number(sellPrice) - Number(buyPrice);
@@ -134,7 +126,7 @@ export default function ProductDetailScreen() {
           <Text style={{ color: c.primary, fontWeight: "600" }}>{t.products.cancel}</Text>
         </TouchableOpacity>
         <Text style={{ color: c.text, fontSize: 18, fontWeight: "800" }}>{t.products.update}</Text>
-        <TouchableOpacity onPress={handleDelete} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Ionicons name="trash" size={16} color={c.danger} />
           <Text style={{ color: c.danger, fontSize: 13, fontWeight: "600" }}>{t.products.delete}</Text>
         </TouchableOpacity>
@@ -186,6 +178,18 @@ export default function ProductDetailScreen() {
           </View>
         ))}
 
+        {/* Barcode */}
+        <View>
+          <Text style={{ color: c.primaryDark, fontWeight: "700", marginBottom: 6 }}>{t.products.barcode}</Text>
+          <TextInput
+            style={{ backgroundColor: c.bgCard, borderWidth: 1.5, borderColor: barcode ? c.primary + "80" : c.border, borderRadius: 14, paddingHorizontal: 14, height: 50, fontSize: 15, color: c.text }}
+            value={barcode}
+            onChangeText={setBarcode}
+            placeholder={t.products.barcodePlaceholder}
+            placeholderTextColor={c.border}
+          />
+        </View>
+
         {buyPrice && sellPrice && (
           <View style={{ backgroundColor: profit >= 0 ? c.bgMuted : "#FEE2E2", borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Ionicons
@@ -235,13 +239,55 @@ export default function ProductDetailScreen() {
 
         {/* Delete button at bottom */}
         <TouchableOpacity
-          onPress={handleDelete}
+          onPress={() => setShowDeleteModal(true)}
           style={{ borderRadius: 16, height: 50, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, borderWidth: 1.5, borderColor: c.danger + "60", backgroundColor: c.danger + "10" }}
         >
           <Ionicons name="trash-outline" size={18} color={c.danger} />
           <Text style={{ color: c.danger, fontWeight: "700", fontSize: 15 }}>{t.products.delete}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Custom Delete Confirmation Modal */}
+      <Modal visible={showDeleteModal} transparent animationType="fade" onRequestClose={() => setShowDeleteModal(false)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setShowDeleteModal(false)}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: c.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 12, paddingBottom: 40, paddingHorizontal: 20 }}>
+              {/* Handle bar */}
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: c.border, alignSelf: "center", marginBottom: 24 }} />
+
+              {/* Icon */}
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: c.danger + "18", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 16 }}>
+                <Ionicons name="trash" size={28} color={c.danger} />
+              </View>
+
+              <Text style={{ color: c.text, fontSize: 20, fontWeight: "800", textAlign: "center", marginBottom: 8 }}>
+                {t.products.delete}
+              </Text>
+              <Text style={{ color: c.textMuted, fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 28 }}>
+                {`"${product.name}" tovarini o'chirasizmi?\nBu amalni qaytarib bo'lmaydi.`}
+              </Text>
+
+              <TouchableOpacity
+                onPress={confirmDelete}
+                style={{ backgroundColor: c.danger, borderRadius: 16, height: 54, alignItems: "center", justifyContent: "center", marginBottom: 10 }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>{t.products.delete}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowDeleteModal(false)}
+                style={{ backgroundColor: c.bgMuted, borderRadius: 16, height: 50, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: c.textSub, fontWeight: "700", fontSize: 15 }}>{t.products.cancel}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }

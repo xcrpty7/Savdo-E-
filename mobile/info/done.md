@@ -1,4 +1,104 @@
-# DONE — Hozir ishlab turgan narsalar
+# DONE — Savdo Mobile
+
+> Yangilangan: 2026-05-03
+
+---
+
+## ✅ Bajarilgan tasklar (2026-05-03 sessiya)
+
+### Task 10 — Chek havola (base64, backend siz)
+- `generateReceiptLink()` → `btoa(unescape(encodeURIComponent(...)))` bilan `savdo.uz/r/{base64}`
+- Natija ekranida "Havolani ulashish" tugma (Share.share)
+- **Fayl**: `mobile/app/(app)/sales/add.tsx`
+
+### Task 13 — Xodim PIN login flow
+- `roleStore` ga `setPIN()`, `verifyPIN()`, `hasPIN()` qo'shildi
+- `mobile/app/(auth)/pin.tsx` — 4 raqam numpad, xato bo'lganda qizil shake
+- `(auth)/_layout.tsx` ga `pin` screen qo'shildi
+- Settings: Kassir rejimiga o'tish = to'g'ri; Admin rejimiga qaytish = PIN ekrani
+- Settings: "PIN o'rnatish" → inline modal (4 raqam); default PIN: 0000
+- **Fayl**: `mobile/store/roleStore.ts`, `mobile/app/(auth)/pin.tsx`, `mobile/app/(app)/settings/index.tsx`
+
+### Task 15 — Barcode skaner to'liq integratsiya
+- DB schema v3 → v4: `barcode` ustuni `products` jadvaliga qo'shildi
+- Migration v4 qo'shildi (`addColumns` → barcode isOptional string)
+- `Product` modeli: `@field("barcode") declare barcode: string | null`
+- `products/add.tsx`: scan → `barcode` state ga (avval `name` ga yozardi), UI field + scan tugma + clear tugma
+- `products/[id].tsx`: barcode ko'rsatish, tahrirlash, saqlash
+- `sales/add.tsx`: `p.barcode === code` bo'yicha qidiradi (avval `p.serverId`)
+- **Fayl**: `db/schema.ts`, `db/migrations.ts`, `db/models/Product.ts`, `products/add.tsx`, `products/[id].tsx`, `sales/add.tsx`
+
+---
+
+## ✅ Bajarilgan tasklar (2026-05-02 sessiya)
+
+### Task 1 — Mahsulot o'chirish
+- `destroyPermanently()` bilan haqiqiy o'chirish, tasdiqlash dialog
+- Mahsulot detail da pastda qizil "O'chirish" tugma
+- **Fayl**: `mobile/app/(app)/products/[id].tsx`
+
+### Task 2 — CSV / JSON export
+- CSV export tuzatildi (BOM, escape, UTI, null cacheDirectory check)
+- JSON export qo'shildi, format tanlash dialog
+- **Fayl**: `mobile/app/(app)/reports/index.tsx`
+
+### Task 3 — Chek ulashish
+- `Share.share()` API — universal, fayl yo'q
+- **Fayl**: `mobile/app/(app)/sales/add.tsx`
+
+### Task 4 — Stok overflow ogohlantirish
+- Qizil border + ogohlantirish satri + tasdiqlash dialog
+- **Fayl**: `mobile/app/(app)/sales/add.tsx`
+
+### Task 5 — Mahsulotlar ro'yxatida stok indikator
+- Rangli badge: 🔴 0 ta / 🟡 1–5 ta / 🟢 6+ ta
+- **Fayl**: `mobile/app/(app)/products/index.tsx`
+
+### Task 6 — Mahsulot detail statistika
+- Jami sotuvlar, tushum, foyda, oxirgi sotilgan sana
+- Stok holati badge
+- **Fayl**: `mobile/app/(app)/products/[id].tsx`
+
+### Task 7 — Subscription tariflari UI
+- Karta dizayn, "TAVSIYA ETILADI" badge, theme colors
+- **Fayl**: `mobile/app/(app)/settings/subscription.tsx`
+
+### Task 8 — Draggable FAB
+- `PanResponder`, edge snap, press vs drag ajratilgan, AsyncStorage pozitsiya
+- **Fayl**: `mobile/components/DraggableFAB.tsx`
+
+### Task 9 — Inline Edit/Delete (mahsulotlar ro'yxati)
+- ⋯ tugma + long-press → Edit / Delete menu, tasdiqlash dialog
+- **Fayl**: `mobile/app/(app)/products/index.tsx`
+
+### Task 11 — Sotuv o'chirish
+- Long-press / ⋯ menu, stok avtomatik qaytariladi
+- **Fayl**: `mobile/app/(app)/sales/index.tsx`
+
+### Task 14 — Kategoriya filter
+- Products ekranida horizontal chip list
+- `useProducts` ga `categoryId` parametr
+- **Fayl**: `mobile/app/(app)/products/index.tsx`, `mobile/hooks/useProducts.ts`
+
+---
+
+## Infratuzilma (sessiyadan oldin)
+
+- Dark/Light mode color redesign
+- Footer tablar 5 → 4
+- Email auth (online + offline)
+- Demo mode (parol "demo", OTP "000000")
+- Auth navigation tuzatildi
+- Push notifications Expo Go skip
+- Stack `_layout.tsx` (20 broken tab bug)
+- Web fayllar main dan pull (228 fayl)
+- i18n uz/ru/en email auth
+- Settings da Reports havolasi
+- Xodimlar Settings da comment out
+
+---
+
+# Loyiha holati (arxiv)
 
 ## Ekranlar (19 ta) — hammasi demo rejimda ishlaydi
 

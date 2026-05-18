@@ -78,6 +78,15 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, null, 'Parol muvaffaqiyatli yangilandi'));
 });
 
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { email, code } = req.body;
+  const { user, accessToken, refreshToken } = await authService.verifyEmail({ email, code });
+  res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
+  res.status(200).json(
+    new ApiResponse(200, { user, accessToken, refreshToken }, 'Email muvaffaqiyatli tasdiqlandi')
+  );
+});
+
 const googleAuth = asyncHandler(async (req, res) => {
   const meta = { userAgent: req.headers['user-agent'] || '', ip: req.ip };
   const { credential } = req.body;
@@ -90,4 +99,4 @@ const googleAuth = asyncHandler(async (req, res) => {
   );
 });
 
-module.exports = { register, login, refreshToken, logout, logoutAll, getMe, forgotPassword, resetPassword, googleAuth };
+module.exports = { register, login, verifyEmail, refreshToken, logout, logoutAll, getMe, forgotPassword, resetPassword, googleAuth };

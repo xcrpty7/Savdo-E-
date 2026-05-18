@@ -61,7 +61,7 @@ export default function CustomersScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={{ backgroundColor: c.bgCard, borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: item.debt > 0 ? c.danger : c.border }}
-            onPress={() => router.push(`/(app)/customers/${item.id}`)}
+            onPress={() => router.push(`/customers/${item.id}`)}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
@@ -92,8 +92,8 @@ export default function CustomersScreen() {
       />
 
       <TouchableOpacity
-        style={{ position: "absolute", bottom: 28, right: 20, backgroundColor: c.primary, width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", shadowColor: c.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 }}
-        onPress={() => router.push("/(app)/customers/add")}
+        style={{ position: "absolute", bottom: 28, right: 20, backgroundColor: c.primary, width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", shadowColor: c.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8, zIndex: 10 }}
+        onPress={() => router.push("/customers/add")}
       >
         <Ionicons name="add" size={30} color="#fff" />
       </TouchableOpacity>

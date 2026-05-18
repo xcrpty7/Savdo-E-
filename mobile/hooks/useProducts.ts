@@ -13,21 +13,21 @@ function useDebounce<T>(value: T, delay = 300): T {
 }
 
 /** Barcha aktiv tovarlar (real-time observable) */
-export function useProducts(search?: string) {
+export function useProducts(search?: string, categoryId?: string | null) {
   const [products, setProducts] = useState<Product[]>([]);
   const debouncedSearch = useDebounce(search ?? "", 300);
 
   useEffect(() => {
-    const query = debouncedSearch
-      ? productsCollection.query(
-          Q.where("archived_at", null),
-          Q.where("name", Q.like(`%${Q.sanitizeLikeString(debouncedSearch)}%`))
-        )
-      : productsCollection.query(Q.where("archived_at", null));
-
-    const sub = query.observe().subscribe(setProducts);
+    const conditions = [Q.where("archived_at", null)];
+    if (debouncedSearch) {
+      conditions.push(Q.where("name", Q.like(`%${Q.sanitizeLikeString(debouncedSearch)}%`)));
+    }
+    if (categoryId) {
+      conditions.push(Q.where("category_id", categoryId));
+    }
+    const sub = productsCollection.query(...conditions).observe().subscribe(setProducts);
     return () => sub.unsubscribe();
-  }, [debouncedSearch]);
+  }, [debouncedSearch, categoryId]);
 
   return products;
 }
@@ -60,6 +60,21 @@ export function useLowStockCount() {
   }, []);
 
   return count;
+}
+
+/** Kam qolgan tovarlar ro'yxati (≤5) — home dashboard uchun */
+export function useLowStockProducts() {
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    const sub = productsCollection
+      .query(Q.where("archived_at", null), Q.where("stock_qty", Q.lte(5)))
+      .observe()
+      .subscribe(setProducts);
+    return () => sub.unsubscribe();
+  }, []);
+
+  return products;
 }
 
 /** Jami aktiv tovarlar soni (tarif limiti uchun) */

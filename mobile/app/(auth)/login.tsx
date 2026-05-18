@@ -6,7 +6,8 @@ import { useLangStore } from "@/store/langStore";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/hooks/useT";
 import { api } from "@/services/api";
-import { dark } from "@/theme/colors";
+import { useTheme } from "@/hooks/useTheme";
+import { light } from "@/theme/colors";
 import { Lang } from "@/i18n";
 
 const LANGS: { code: Lang; label: string; flag: string }[] = [
@@ -30,7 +31,7 @@ function Field({
   showSecure?: boolean;
   keyboardType?: any;
   autoCapitalize?: any;
-  c: typeof dark;
+  c: typeof light;
 }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: c.bg, borderRadius: 14, paddingHorizontal: 14, marginBottom: 12, borderWidth: 1.5, borderColor: c.border, height: 54 }}>
@@ -71,11 +72,34 @@ export default function LoginScreen() {
   const { lang, setLang } = useLangStore();
   const { setToken, saveEmailCredentials, verifyEmailOffline } = useAuthStore();
   const t = useT();
-  const c = dark;
+  const { c } = useTheme();
 
-  const isPhoneValid = phone.length >= 9;
-  const isSignInValid = email.includes("@") && password.length >= 1;
-  const isRegisterValid = name.trim().length >= 2 && email.includes("@") && password.length >= 4 && confirmPwd === password;
+  const pwdChecks = [
+    { key: "len",   label: "Kamida 8 ta belgi", pass: password.length >= 8 },
+    { key: "lower", label: "Kichik harf (a-z)",  pass: /[a-z]/.test(password) },
+    { key: "upper", label: "Katta harf (A-Z)",   pass: /[A-Z]/.test(password) },
+    { key: "digit", label: "Raqam (0-9)",         pass: /[0-9]/.test(password) },
+  ];
+  const pwdAllGood  = pwdChecks.every((ch) => ch.pass);
+  const pwdAnyTried = password.length > 0;
+
+  const isPhoneValid    = phone.length >= 9;
+  const isSignInValid   = email.includes("@") && password.length >= 1;
+  const isRegisterValid = name.trim().length >= 2 && email.includes("@") && pwdAllGood && confirmPwd === password;
+
+  function submitBg() {
+    const valid = emailMode === "signin" ? isSignInValid : isRegisterValid;
+    if (loading) return c.bgMuted;
+    if (valid) return c.primary;
+    if (emailMode === "register" && pwdAnyTried && !pwdAllGood) return c.danger;
+    return c.bgMuted;
+  }
+  function submitTextColor() {
+    const valid = emailMode === "signin" ? isSignInValid : isRegisterValid;
+    return (valid || (emailMode === "register" && pwdAnyTried && !pwdAllGood)) && !loading
+      ? "#fff"
+      : c.textMuted;
+  }
 
   async function handlePhoneNext() {
     if (!isPhoneValid) return;
@@ -83,11 +107,11 @@ export default function LoginScreen() {
     try {
       await api.post("/auth/send-otp", { phone: `+998${phone}` });
     } catch {
-      // backend not ready — demo mode on verify screen (000000)
+      // demo mode on verify screen (000000)
     } finally {
       setLoading(false);
     }
-    router.push({ pathname: "/(auth)/verify", params: { phone } });
+    router.push({ pathname: "/verify", params: { phone } });
   }
 
   async function handleSignIn() {
@@ -98,7 +122,7 @@ export default function LoginScreen() {
         await setToken("demo-token", "demo-refresh");
         return;
       }
-      const res = await api.post("/auth/login/email", { email: email.toLowerCase(), password });
+      const res = await api.post("/auth/login", { email: email.toLowerCase(), password });
       await saveEmailCredentials(email.toLowerCase(), password, res.data.accessToken, res.data.refreshToken);
     } catch (e: any) {
       if (!e?.response) {
@@ -115,27 +139,17 @@ export default function LoginScreen() {
 
   async function handleRegister() {
     if (!isRegisterValid) return;
-    if (password !== confirmPwd) {
-      Alert.alert(t.common.error, t.auth.passwordMismatch);
-      return;
-    }
     setLoading(true);
     try {
-      if (password === "demo") {
-        // demo mode — skip OTP, go straight to verify-email with demo hint
-        router.push({ pathname: "/(auth)/verify-email", params: { email: email || "demo@savdo.uz" } });
-        return;
-      }
-      await api.post("/auth/register/email", {
+      await api.post("/auth/register", {
         name: name.trim(),
         email: email.toLowerCase(),
         password,
       });
-      router.push({ pathname: "/(auth)/verify-email", params: { email: email.toLowerCase() } });
+      router.push({ pathname: "/verify-email", params: { email: email.toLowerCase() } });
     } catch (e: any) {
       if (!e?.response) {
-        // no internet — go to verify-email in demo mode
-        router.push({ pathname: "/(auth)/verify-email", params: { email: email.toLowerCase() } });
+        router.push({ pathname: "/verify-email", params: { email: email.toLowerCase() } });
       } else if (e?.response?.status === 409) {
         Alert.alert(t.common.error, t.auth.emailExists);
       } else {
@@ -152,33 +166,42 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: c.bg }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Logo area ── */}
+        <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 64, paddingBottom: 28, paddingHorizontal: 24 }}>
+          <View style={{ width: 88, height: 88, backgroundColor: c.primary, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 14, shadowColor: c.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 16, elevation: 10 }}>
+            <Ionicons name="stats-chart" size={42} color="#fff" />
+          </View>
+          <Text style={{ color: c.text, fontSize: 32, fontWeight: "800", letterSpacing: -1 }}>Savdo</Text>
+          <Text style={{ color: c.textSub, fontSize: 13, marginTop: 4, marginBottom: 20 }}>{t.auth.appDesc}</Text>
 
-        {/* Logo area */}
-        <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 80, paddingBottom: 32 }}>
-          {/* Lang picker */}
-          <View style={{ position: "absolute", top: 52, right: 20, flexDirection: "row", gap: 6 }}>
+          {/* Lang picker — full-width pill */}
+          <View style={{ flexDirection: "row", backgroundColor: c.bgMuted, borderRadius: 14, padding: 3, width: "100%" }}>
             {LANGS.map((l) => (
               <TouchableOpacity
                 key={l.code}
                 onPress={() => setLang(l.code)}
-                style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 9, backgroundColor: lang === l.code ? c.primary : "rgba(255,255,255,0.08)" }}
+                style={{
+                  flex: 1, paddingVertical: 10, borderRadius: 11,
+                  backgroundColor: lang === l.code ? c.primary : "transparent",
+                  alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 5,
+                }}
               >
-                <Text style={{ color: lang === l.code ? "#fff" : c.textSub, fontWeight: "700", fontSize: 11 }}>
-                  {l.flag} {l.label}
+                <Text style={{ fontSize: 15 }}>{l.flag}</Text>
+                <Text style={{ color: lang === l.code ? "#fff" : c.textSub, fontWeight: "700", fontSize: 13 }}>
+                  {l.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-
-          <View style={{ width: 96, height: 96, backgroundColor: c.primary, borderRadius: 30, alignItems: "center", justifyContent: "center", marginBottom: 16, shadowColor: c.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 16, elevation: 10 }}>
-            <Ionicons name="stats-chart" size={46} color="#fff" />
-          </View>
-          <Text style={{ color: c.text, fontSize: 34, fontWeight: "800", letterSpacing: -1 }}>Savdo</Text>
-          <Text style={{ color: c.textSub, fontSize: 13, marginTop: 4 }}>{t.auth.appDesc}</Text>
         </View>
 
-        {/* Bottom card */}
+        {/* ── Bottom card ── */}
         <View style={{ backgroundColor: c.bgCard, borderTopLeftRadius: 34, borderTopRightRadius: 34, paddingHorizontal: 22, paddingTop: 26, paddingBottom: 48, flex: 1 }}>
 
           {/* Phone / Email tab */}
@@ -242,12 +265,12 @@ export default function LoginScreen() {
           {tab === "email" && (
             <>
               {/* Sign In / Register toggle */}
-              <View style={{ flexDirection: "row", backgroundColor: c.bgMuted, borderRadius: 11, padding: 3, marginBottom: 18 }}>
+              <View style={{ flexDirection: "row", backgroundColor: c.bgMuted, borderRadius: 11, padding: 3, marginBottom: 20 }}>
                 {(["signin", "register"] as EmailMode[]).map((m) => (
                   <TouchableOpacity
                     key={m}
                     onPress={() => setEmailMode(m)}
-                    style={{ flex: 1, paddingVertical: 7, borderRadius: 9, backgroundColor: emailMode === m ? c.bgCard : "transparent", alignItems: "center" }}
+                    style={{ flex: 1, paddingVertical: 8, borderRadius: 9, backgroundColor: emailMode === m ? c.bgCard : "transparent", alignItems: "center" }}
                   >
                     <Text style={{ color: emailMode === m ? c.primary : c.textMuted, fontWeight: "700", fontSize: 13 }}>
                       {m === "signin" ? t.auth.signIn : t.auth.register}
@@ -256,40 +279,124 @@ export default function LoginScreen() {
                 ))}
               </View>
 
-              {/* Register extra field */}
+              {/* Register — name */}
               {emailMode === "register" && (
-                <Field icon="person-outline" placeholder={t.auth.namePlaceholder} value={name} onChangeText={setName} autoCapitalize="words" c={c} />
+                <Field
+                  icon="person-outline"
+                  placeholder={t.auth.namePlaceholder}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  c={c}
+                />
               )}
 
+              {/* Email (shared) */}
               <Field icon="mail-outline" placeholder={t.auth.emailPlaceholder} value={email} onChangeText={setEmail} keyboardType="email-address" c={c} />
-              <Field icon="lock-closed-outline" placeholder={t.auth.passwordPlaceholder} value={password} onChangeText={setPassword} secure showSecure={showPass} onToggleSecure={() => setShowPass(!showPass)} c={c} />
 
+              {/* Password (shared) */}
+              <Field
+                icon="lock-closed-outline"
+                placeholder={t.auth.passwordPlaceholder}
+                value={password}
+                onChangeText={setPassword}
+                secure
+                showSecure={showPass}
+                onToggleSecure={() => setShowPass(!showPass)}
+                c={c}
+              />
+
+              {/* Sign-in: forgot password */}
+              {emailMode === "signin" && (
+                <TouchableOpacity
+                  style={{ alignSelf: "flex-end", marginTop: -6, marginBottom: 10 }}
+                  onPress={() => router.push("/(auth)/forgot-password")}
+                >
+                  <Text style={{ color: c.primary, fontSize: 12, fontWeight: "600" }}>Parolni unutdingizmi?</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Register — confirm password + requirements */}
               {emailMode === "register" && (
-                <Field icon="shield-checkmark-outline" placeholder={t.auth.confirmPasswordPlaceholder} value={confirmPwd} onChangeText={setConfirmPwd} secure showSecure={showConfirm} onToggleSecure={() => setShowConfirm(!showConfirm)} c={c} />
+                <>
+                  <Field
+                    icon="shield-checkmark-outline"
+                    placeholder={t.auth.confirmPasswordPlaceholder}
+                    value={confirmPwd}
+                    onChangeText={setConfirmPwd}
+                    secure
+                    showSecure={showConfirm}
+                    onToggleSecure={() => setShowConfirm(!showConfirm)}
+                    c={c}
+                  />
+
+                  {/* Password requirements checklist */}
+                  <View style={{ backgroundColor: c.bg, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1.5, borderColor: pwdAnyTried && !pwdAllGood ? c.danger + "55" : c.border }}>
+                    <Text style={{ color: c.textMuted, fontSize: 11, fontWeight: "700", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Parol talablari
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {pwdChecks.map((ch) => (
+                        <View key={ch.key} style={{ width: "47%", flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons
+                            name={ch.pass ? "checkmark-circle" : "close-circle"}
+                            size={15}
+                            color={ch.pass ? c.primary : c.danger}
+                          />
+                          <Text style={{ color: ch.pass ? c.primary : c.danger, fontSize: 12, fontWeight: "600", flex: 1 }}>
+                            {ch.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {confirmPwd.length > 0 && confirmPwd !== password && (
+                    <Text style={{ color: c.danger, fontSize: 12, marginTop: -6, marginBottom: 8 }}>
+                      Parollar mos kelmayapti
+                    </Text>
+                  )}
+                </>
               )}
 
               {/* Submit button */}
               <TouchableOpacity
-                style={{ backgroundColor: (emailMode === "signin" ? isSignInValid : isRegisterValid) && !loading ? c.primary : c.bgMuted, borderRadius: 14, height: 54, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, marginTop: 4, marginBottom: 14, shadowColor: c.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: (emailMode === "signin" ? isSignInValid : isRegisterValid) && !loading ? 0.35 : 0, shadowRadius: 8, elevation: (emailMode === "signin" ? isSignInValid : isRegisterValid) && !loading ? 5 : 0 }}
+                style={{
+                  backgroundColor: submitBg(),
+                  borderRadius: 14, height: 54,
+                  alignItems: "center", justifyContent: "center",
+                  flexDirection: "row", gap: 8,
+                  marginTop: 4, marginBottom: 14,
+                  shadowColor: submitBg(),
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
                 onPress={emailMode === "signin" ? handleSignIn : handleRegister}
-                disabled={loading || (emailMode === "signin" ? !isSignInValid : !isRegisterValid)}
+                disabled={loading}
               >
                 {loading
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <Ionicons name={emailMode === "signin" ? "arrow-forward" : "person-add"} size={17} color={(emailMode === "signin" ? isSignInValid : isRegisterValid) ? "#fff" : c.textMuted} />
+                  : <Ionicons
+                      name={emailMode === "signin" ? "arrow-forward" : "person-add"}
+                      size={17}
+                      color={submitTextColor()}
+                    />
                 }
-                <Text style={{ color: (emailMode === "signin" ? isSignInValid : isRegisterValid) && !loading ? "#fff" : c.textMuted, fontWeight: "800", fontSize: 16 }}>
+                <Text style={{ color: submitTextColor(), fontWeight: "800", fontSize: 16 }}>
                   {loading ? t.auth.checking : emailMode === "signin" ? t.auth.signIn : t.auth.register}
                 </Text>
               </TouchableOpacity>
 
-              {/* Divider + Demo */}
+              {/* Divider */}
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
                 <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
                 <Text style={{ color: c.textMuted, marginHorizontal: 12, fontSize: 12 }}>{t.auth.or}</Text>
                 <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
               </View>
 
+              {/* Demo button */}
               <TouchableOpacity
                 style={{ backgroundColor: c.bg, borderRadius: 14, height: 50, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, borderWidth: 1.5, borderColor: c.border }}
                 onPress={enterDemo}
@@ -301,6 +408,16 @@ export default function LoginScreen() {
               <Text style={{ color: c.textMuted, textAlign: "center", fontSize: 11, marginTop: 10 }}>
                 {emailMode === "signin" ? t.auth.emailDemoHint : t.auth.registerDemoHint}
               </Text>
+
+              {/* Trust badges */}
+              <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: c.border, gap: 8 }}>
+                {["Ma'lumotlaringiz xavfsiz", "Bepul foydalanish", "O'rnatish shart emas"].map((text) => (
+                  <View key={text} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="checkmark-circle" size={14} color={c.primary} />
+                    <Text style={{ color: c.textMuted, fontSize: 12 }}>{text}</Text>
+                  </View>
+                ))}
+              </View>
             </>
           )}
         </View>

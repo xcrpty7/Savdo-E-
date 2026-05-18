@@ -29,6 +29,7 @@ export default function AddProductScreen() {
   const [buyPrice, setBuyPrice] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [unit, setUnit] = useState<UnitKey>("dona");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -51,7 +52,7 @@ export default function AddProductScreen() {
         t.subscription.limitDesc,
         [
           { text: t.common.cancel, style: "cancel" },
-          { text: t.subscription.goToPro, onPress: () => router.push("/(app)/settings/subscription") },
+          { text: t.subscription.goToPro, onPress: () => router.push("/settings/subscription") },
         ]
       );
       return;
@@ -69,6 +70,7 @@ export default function AddProductScreen() {
           p.sellPrice = Number(sellPrice);
           p.stockQty = Number(stock) || 0;
           p.unit = unit;
+          p.barcode = barcode.trim() || null;
           p.categoryId = categoryId;
           p.archivedAt = null;
           p.isSynced = false;
@@ -109,14 +111,9 @@ export default function AddProductScreen() {
         </TouchableOpacity>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ color: c.text, fontSize: 26, fontWeight: "800" }}>{t.products.addProduct}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Text style={{ color: productCount >= FREE_LIMIT ? c.danger : c.textMuted, fontSize: 12, fontWeight: "600" }}>
-              {productCount}/{FREE_LIMIT}
-            </Text>
-            <TouchableOpacity onPress={() => setShowScanner(true)} style={{ backgroundColor: c.bgMuted, borderRadius: 10, padding: 8, borderWidth: 1, borderColor: c.border }}>
-              <Ionicons name="barcode" size={20} color={c.primary} />
-            </TouchableOpacity>
-          </View>
+          <Text style={{ color: productCount >= FREE_LIMIT ? c.danger : c.textMuted, fontSize: 12, fontWeight: "600" }}>
+            {productCount}/{FREE_LIMIT}
+          </Text>
         </View>
       </View>
 
@@ -125,6 +122,32 @@ export default function AddProductScreen() {
         <Field label={t.products.buyPrice} value={buyPrice} onChangeText={setBuyPrice} keyboardType="numeric" placeholder="0" c={c} />
         <Field label={t.products.sellPrice} value={sellPrice} onChangeText={setSellPrice} keyboardType="numeric" placeholder="0" c={c} />
         <Field label={t.products.stock} value={stock} onChangeText={setStock} keyboardType="numeric" placeholder="0" c={c} />
+
+        {/* Barcode */}
+        <View>
+          <Text style={{ color: c.primaryDark, fontWeight: "700", marginBottom: 6 }}>{t.products.barcode}</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1, backgroundColor: c.bgCard, borderWidth: 1.5, borderColor: barcode ? c.primary : c.border, borderRadius: 14, paddingHorizontal: 14, height: 50, justifyContent: "center" }}>
+              <Text style={{ color: barcode ? c.text : c.textMuted, fontSize: 15 }} numberOfLines={1}>
+                {barcode || t.products.barcodePlaceholder}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowScanner(true)}
+              style={{ width: 50, height: 50, backgroundColor: c.primary + "18", borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: c.primary + "40" }}
+            >
+              <Ionicons name="barcode-outline" size={22} color={c.primary} />
+            </TouchableOpacity>
+            {barcode.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setBarcode("")}
+                style={{ width: 50, height: 50, backgroundColor: c.bgMuted, borderRadius: 14, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="close" size={20} color={c.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
 
         {/* Kategoriya */}
         <View>
@@ -203,8 +226,8 @@ export default function AddProductScreen() {
       {/* Barcode scanner modali */}
       <Modal visible={showScanner} animationType="slide">
         <BarcodeScanner
-          onScanned={(barcode) => {
-            setName(barcode);
+          onScanned={(code) => {
+            setBarcode(code);
             setShowScanner(false);
           }}
           onClose={() => setShowScanner(false)}

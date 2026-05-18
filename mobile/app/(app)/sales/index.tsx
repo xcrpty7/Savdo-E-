@@ -1,12 +1,30 @@
-import { View, Text, FlatList, TouchableOpacity } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, Alert } from "react-native";
 import { useState } from "react";
 import { router } from "expo-router";
 import { useSales } from "@/hooks/useSales";
 import { useT } from "@/hooks/useT";
 import { useTheme } from "@/hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
+import { database, productsCollection } from "@/db";
+import { Sale } from "@/db/models/Sale";
+import { Q } from "@nozbe/watermelondb";
+import { DraggableFAB } from "@/components/DraggableFAB";
 
 type Filter = "today" | "week" | "month";
+
+async function deleteSale(sale: Sale) {
+  await database.write(async () => {
+    // Stokni qaytarish
+    const products = await productsCollection.query(Q.where("id", sale.productId)).fetch();
+    if (products.length > 0) {
+      await products[0].update((p) => {
+        p.stockQty = p.stockQty + sale.qty;
+        p.isSynced = false;
+      });
+    }
+    await sale.destroyPermanently();
+  });
+}
 
 export default function SalesScreen() {
   const [filter, setFilter] = useState<Filter>("today");
@@ -19,9 +37,38 @@ export default function SalesScreen() {
 
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "today", label: t.sales.filters.today },
-    { key: "week", label: t.sales.filters.week },
+    { key: "week",  label: t.sales.filters.week },
     { key: "month", label: t.sales.filters.month },
   ];
+
+  function handleSaleOptions(sale: Sale) {
+    Alert.alert(sale.productName, `${sale.qty} × ${sale.sellPrice.toLocaleString()} so'm`, [
+      {
+        text: "O'chirish",
+        style: "destructive",
+        onPress: () =>
+          Alert.alert(
+            "Sotuvni o'chirish",
+            `"${sale.productName}" sotuvini o'chirasizmi?\nStokga ${sale.qty} ta qaytariladi.`,
+            [
+              { text: "Bekor qilish", style: "cancel" },
+              {
+                text: "O'chirish",
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    await deleteSale(sale);
+                  } catch {
+                    Alert.alert(t.common.error, "O'chirishda xato yuz berdi");
+                  }
+                },
+              },
+            ]
+          ),
+      },
+      { text: "Bekor qilish", style: "cancel" },
+    ]);
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -67,10 +114,19 @@ export default function SalesScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={{ backgroundColor: c.bgCard, borderRadius: 16, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: c.border }}>
+          <TouchableOpacity
+            style={{ backgroundColor: c.bgCard, borderRadius: 16, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: c.border }}
+            onLongPress={() => handleSaleOptions(item)}
+            delayLongPress={400}
+          >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1 }}>{item.productName}</Text>
-              <Text style={{ color: c.primary, fontWeight: "800", fontSize: 15 }}>+{item.profit.toLocaleString()} so'm</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ color: c.primary, fontWeight: "800", fontSize: 15 }}>+{item.profit.toLocaleString()} so'm</Text>
+                <TouchableOpacity onPress={() => handleSaleOptions(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="ellipsis-horizontal" size={18} color={c.textMuted} />
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
               <Text style={{ color: c.textMuted, fontSize: 13 }}>{item.qty} × {item.sellPrice.toLocaleString()} so'm</Text>
@@ -84,16 +140,11 @@ export default function SalesScreen() {
                 <Text style={{ color: c.warn, fontSize: 11 }}>{t.sales.syncing}</Text>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
         )}
       />
 
-      <TouchableOpacity
-        style={{ position: "absolute", bottom: 28, right: 20, backgroundColor: c.primary, width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", shadowColor: c.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 }}
-        onPress={() => router.push("/(app)/sales/add")}
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
+      <DraggableFAB color={c.primary} onPress={() => router.push("/sales/add")} />
     </View>
   );
 }

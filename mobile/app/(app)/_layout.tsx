@@ -62,8 +62,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: t.nav.settings,
-          tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
+          title: t.nav.profile,
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} />,
         }}
       />
     </Tabs>

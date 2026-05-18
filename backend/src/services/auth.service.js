@@ -12,7 +12,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const REFRESH_TOKEN_EXPIRES_DAYS = 7;
 
 /**
- * Register a new user
+ * Register a new user and send email verification code
  */
 const register = async ({ name, email, password }) => {
   const existingUser = await User.findOne({ email });
@@ -20,8 +20,74 @@ const register = async ({ name, email, password }) => {
     throw new ApiError(409, 'Email already registered');
   }
 
-  const user = await User.create({ name, email, password });
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 daqiqa
+
+  const user = await User.create({
+    name,
+    email,
+    password,
+    emailVerificationCode: code,
+    emailVerificationExpires: expires,
+  });
+
+  await sendEmail({
+    to: email,
+    subject: 'Savdo — Email tasdiqlash kodi',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto;">
+        <h2 style="color:#1a1a2e;">Email tasdiqlash</h2>
+        <p>Salom, <strong>${name}</strong>!</p>
+        <p>Savdo ilovasiga kirish uchun quyidagi kodni kiriting:</p>
+        <div style="font-size:36px;font-weight:900;letter-spacing:10px;color:#6366f1;text-align:center;padding:24px;background:#f5f5ff;border-radius:12px;margin:20px 0;">
+          ${code}
+        </div>
+        <p style="color:#888;font-size:13px;">Kod 15 daqiqa ichida amal qiladi.</p>
+        <p style="color:#888;font-size:13px;">Agar siz ro'yxatdan o'tmagan bo'lsangiz, bu xatni e'tiborsiz qoldiring.</p>
+      </div>
+    `,
+  });
+
   return user;
+};
+
+/**
+ * Verify email with 6-digit code
+ */
+const verifyEmail = async ({ email, code }) => {
+  const user = await User.findOne({ email })
+    .select('+emailVerificationCode +emailVerificationExpires');
+
+  if (!user) throw new ApiError(400, 'Foydalanuvchi topilmadi');
+  if (user.isEmailVerified) throw new ApiError(400, 'Email allaqachon tasdiqlangan');
+  if (!user.emailVerificationCode || user.emailVerificationCode !== code) {
+    throw new ApiError(400, 'Kod noto\'g\'ri');
+  }
+  if (user.emailVerificationExpires < new Date()) {
+    throw new ApiError(400, 'Kodning muddati o\'tgan');
+  }
+
+  user.isEmailVerified = true;
+  user.emailVerificationCode = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save({ validateBeforeSave: false });
+
+  const tokenPayload = { id: user._id, role: user.role };
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshTokenValue = generateRefreshToken(tokenPayload);
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRES_DAYS);
+
+  await RefreshToken.create({
+    user: user._id,
+    token: refreshTokenValue,
+    expiresAt,
+    userAgent: '',
+    ip: '',
+  });
+
+  return { user, accessToken, refreshToken: refreshTokenValue };
 };
 
 /**
@@ -250,4 +316,4 @@ const googleAuth = async (credential, meta = {}) => {
   return { user, accessToken, refreshToken: refreshTokenValue };
 };
 
-module.exports = { register, login, refreshTokens, logout, logoutAll, forgotPassword, resetPassword, googleAuth };
+module.exports = { register, login, verifyEmail, refreshTokens, logout, logoutAll, forgotPassword, resetPassword, googleAuth };

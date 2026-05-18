@@ -28,7 +28,7 @@ export default function RootLayout() {
     if (token) {
       router.replace("/(app)");
     } else {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/");
     }
   }, [token, ready]);
 
@@ -41,7 +41,7 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [token]);
 
-  if (!ready) return <View style={{ flex: 1, backgroundColor: isDark ? "#0a1f12" : "#f0f7f4" }} />;
+  if (!ready) return <View style={{ flex: 1, backgroundColor: "#0C1410" }} />;
 
   return (
     <>

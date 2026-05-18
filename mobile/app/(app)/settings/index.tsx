@@ -4,15 +4,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/store/authStore";
 import { useLangStore } from "@/store/langStore";
 import { useThemeStore } from "@/store/themeStore";
-import { useRoleStore } from "@/store/roleStore";
 import { useTheme } from "@/hooks/useTheme";
 import { useT } from "@/hooks/useT";
+import { useRoleStore } from "@/store/roleStore";
 import { Lang } from "@/i18n";
 
-const LANGS: { code: Lang; label: string; native: string; flag: string }[] = [
-  { code: "uz", label: "UZ", native: "O'zbek",  flag: "🇺🇿" },
-  { code: "ru", label: "RU", native: "Русский", flag: "🇷🇺" },
-  { code: "en", label: "EN", native: "English",  flag: "🇬🇧" },
+const LANGS: { code: Lang; label: string; flag: string }[] = [
+  { code: "uz", label: "O'zbek", flag: "🇺🇿" },
+  { code: "ru", label: "Русский", flag: "🇷🇺" },
+  { code: "en", label: "English", flag: "🇬🇧" },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -29,8 +29,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ iconName, label, sub, right, onPress, danger }: {
+function Row({ iconName, iconBg, label, sub, right, onPress, danger }: {
   iconName: React.ComponentProps<typeof Ionicons>["name"];
+  iconBg?: string;
   label: string;
   sub?: string;
   right?: React.ReactNode;
@@ -44,7 +45,7 @@ function Row({ iconName, label, sub, right, onPress, danger }: {
       activeOpacity={onPress ? 0.7 : 1}
       style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14 }}
     >
-      <View style={{ width: 38, height: 38, backgroundColor: danger ? "#FEE2E2" : c.bgMuted, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+      <View style={{ width: 38, height: 38, backgroundColor: danger ? "#FEE2E2" : (iconBg || c.bgMuted), borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
         <Ionicons name={iconName} size={20} color={danger ? c.danger : c.textSub} />
       </View>
       <View style={{ flex: 1 }}>
@@ -56,13 +57,18 @@ function Row({ iconName, label, sub, right, onPress, danger }: {
   );
 }
 
-export default function SettingsScreen() {
+function Divider() {
+  const { c } = useTheme();
+  return <View style={{ height: 1, backgroundColor: c.border, marginLeft: 66 }} />;
+}
+
+export default function ProfileScreen() {
   const clearToken = useAuthStore((s) => s.clearToken);
   const { lang, setLang } = useLangStore();
   const { isDark, toggleTheme } = useThemeStore();
-  const { role, setRole } = useRoleStore();
   const { c } = useTheme();
   const t = useT();
+  const { isAdmin } = useRoleStore();
 
   function handleLogout() {
     Alert.alert(t.settings.logout, t.settings.logoutConfirm, [
@@ -73,16 +79,34 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.bg }} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={{ backgroundColor: c.primary, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 28, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: 24 }}>
-        <Text style={{ color: "#fff", fontSize: 28, fontWeight: "800" }}>{t.settings.title}</Text>
-        <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 13, marginTop: 4 }}>Savdo App v1.0.0</Text>
+
+      {/* Profile Header */}
+      <View style={{ backgroundColor: c.bg, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 24 }}>
+        <Text style={{ color: c.text, fontSize: 28, fontWeight: "800", marginBottom: 20 }}>{t.nav.profile}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16, backgroundColor: c.bgCard, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: c.border }}>
+          <View style={{ width: 64, height: 64, backgroundColor: c.primary + "20", borderRadius: 32, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="person" size={30} color={c.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: c.text, fontWeight: "800", fontSize: 17 }}>Savdogar</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+              <View style={{ backgroundColor: c.primary + "18", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ color: c.primary, fontSize: 11, fontWeight: "800" }}>
+                  {isAdmin() ? "ADMIN" : "FREE"}
+                </Text>
+              </View>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>v1.0.0</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={c.border} />
+        </View>
       </View>
 
       {/* Appearance */}
       <Section title={t.settings.appearance}>
         <Row
           iconName={isDark ? "moon" : "sunny"}
+          iconBg={isDark ? "#1E293B" : "#FEF9C3"}
           label={isDark ? t.settings.dark : t.settings.light}
           sub={t.settings.themeToggle}
           right={
@@ -107,59 +131,50 @@ export default function SettingsScreen() {
               <View style={{ width: 38, height: 38, backgroundColor: c.bgMuted, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
                 <Text style={{ fontSize: 20 }}>{l.flag}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.text, fontWeight: "700", fontSize: 14 }}>{l.native}</Text>
-                <Text style={{ color: c.textMuted, fontSize: 12 }}>{l.label}</Text>
-              </View>
+              <Text style={{ flex: 1, color: c.text, fontWeight: "700", fontSize: 14 }}>{l.label}</Text>
               {lang === l.code && (
                 <View style={{ backgroundColor: c.primary, borderRadius: 10, padding: 4 }}>
                   <Ionicons name="checkmark" size={13} color="#fff" />
                 </View>
               )}
             </TouchableOpacity>
-            {idx < LANGS.length - 1 && <View style={{ height: 1, backgroundColor: c.border, marginLeft: 66 }} />}
+            {idx < LANGS.length - 1 && <Divider />}
           </View>
         ))}
       </Section>
 
-      {/* Analytics */}
-      <Section title={t.reports.title}>
+      {/* Business */}
+      <Section title="Biznes">
         <Row
           iconName="bar-chart"
+          iconBg="#EDE9FE"
           label={t.reports.title}
           sub={t.reports.totalRevenue}
           right={<Ionicons name="chevron-forward" size={18} color={c.textMuted} />}
-          onPress={() => router.push("/(app)/reports")}
+          onPress={() => router.push("/reports")}
         />
-      </Section>
-
-      {/* Subscription */}
-      <Section title={t.settings.subscription}>
+        <Divider />
         <Row
           iconName="card"
+          iconBg="#DBEAFE"
           label={t.settings.subscription}
           sub={`${t.subscription.free} — ${t.subscription.active}`}
           right={<Ionicons name="chevron-forward" size={18} color={c.textMuted} />}
-          onPress={() => router.push("/(app)/settings/subscription")}
+          onPress={() => router.push("/settings/subscription")}
         />
       </Section>
 
-      {/* Employees — vaqtincha yashirilgan, PIN flow + backend tayyor bo'lganda ochish */}
-      {/* <Section title={t.employees.title}>
+      {/* Team */}
+      <Section title={t.employees.title}>
         <Row
           iconName="people"
+          iconBg="#D1FAE5"
           label={t.employees.title}
-          sub={t.employees.currentRole + ": " + (role === "admin" ? t.employees.admin : t.employees.cashier)}
+          sub={t.employees.add}
           right={<Ionicons name="chevron-forward" size={18} color={c.textMuted} />}
-          onPress={() => router.push("/(app)/settings/employees")}
+          onPress={() => router.push("/settings/employees")}
         />
-        <View style={{ height: 1, backgroundColor: c.border, marginLeft: 66 }} />
-        <Row
-          iconName={role === "admin" ? "person" : "shield-checkmark"}
-          label={role === "admin" ? t.employees.switchToCashier : t.employees.switchToAdmin}
-          onPress={() => setRole(role === "admin" ? "cashier" : "admin")}
-        />
-      </Section> */}
+      </Section>
 
       {/* Account */}
       <Section title={t.settings.account}>

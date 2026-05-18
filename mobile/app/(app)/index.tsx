@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { useT } from "@/hooks/useT";
 import { useTodayStats } from "@/hooks/useSales";
+import { useLowStockProducts } from "@/hooks/useProducts";
 import { useTheme } from "@/hooks/useTheme";
 import { SaleCard } from "@/components/SaleCard";
 import { SyncStatus } from "@/components/SyncStatus";
@@ -10,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 export default function HomeScreen() {
   const t = useT();
   const { revenue, profit, count, sales } = useTodayStats();
+  const lowStockProducts = useLowStockProducts();
   const { c } = useTheme();
   const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
 
@@ -60,14 +62,14 @@ export default function HomeScreen() {
         <Text style={{ color: c.text, fontSize: 16, fontWeight: "800", marginBottom: 12 }}>{t.home.quickActions}</Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <TouchableOpacity
-            onPress={() => router.push("/(app)/sales/add")}
+            onPress={() => router.push("/sales/add")}
             style={{ flex: 1, backgroundColor: c.primary, borderRadius: 18, padding: 18, alignItems: "center" }}
           >
             <Ionicons name="cart" size={30} color="#fff" />
             <Text style={{ color: "#fff", fontWeight: "700", marginTop: 8, fontSize: 13 }}>{t.home.addSale}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => router.push("/(app)/products/add")}
+            onPress={() => router.push("/products/add")}
             style={{ flex: 1, backgroundColor: c.bgCard, borderRadius: 18, padding: 18, alignItems: "center", borderWidth: 1.5, borderColor: c.border }}
           >
             <Ionicons name="cube" size={30} color={c.primary} />
@@ -81,7 +83,7 @@ export default function HomeScreen() {
         <Text style={{ color: c.text, fontSize: 16, fontWeight: "800", marginBottom: 12 }}>{t.home.businessTools}</Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <TouchableOpacity
-            onPress={() => router.push("/(app)/suppliers")}
+            onPress={() => router.push("/suppliers")}
             style={{ flex: 1, backgroundColor: c.bgCard, borderRadius: 18, padding: 16, alignItems: "center", borderWidth: 1, borderColor: c.border }}
           >
             <View style={{ width: 48, height: 48, backgroundColor: "#FEF3C7", borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
@@ -90,7 +92,7 @@ export default function HomeScreen() {
             <Text style={{ color: c.text, fontWeight: "700", fontSize: 13, textAlign: "center" }}>{t.suppliers.title}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => router.push("/(app)/customers")}
+            onPress={() => router.push("/customers")}
             style={{ flex: 1, backgroundColor: c.bgCard, borderRadius: 18, padding: 16, alignItems: "center", borderWidth: 1, borderColor: c.border }}
           >
             <View style={{ width: 48, height: 48, backgroundColor: "#FEE2E2", borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
@@ -101,11 +103,43 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* LOW STOCK ALERT */}
+      {lowStockProducts.length > 0 && (
+        <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+          <View style={{ backgroundColor: c.bgCard, borderRadius: 18, overflow: "hidden", borderWidth: 1.5, borderColor: c.warn + "50" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.warn + "15", borderBottomWidth: 1, borderBottomColor: c.warn + "30" }}>
+              <Ionicons name="warning" size={18} color={c.warn} />
+              <Text style={{ color: c.warn, fontWeight: "800", fontSize: 14, flex: 1 }}>Kam qolgan tovarlar</Text>
+              <View style={{ backgroundColor: c.warn, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{lowStockProducts.length}</Text>
+              </View>
+            </View>
+            {lowStockProducts.slice(0, 5).map((p, idx) => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => router.push(`/products/${p.id}`)}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: idx < Math.min(lowStockProducts.length, 5) - 1 ? 1 : 0, borderBottomColor: c.border }}
+              >
+                <Text style={{ color: c.text, fontWeight: "600", fontSize: 14, flex: 1 }} numberOfLines={1}>{p.name}</Text>
+                <View style={{
+                  borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+                  backgroundColor: p.stockQty === 0 ? c.danger + "18" : c.warn + "18",
+                }}>
+                  <Text style={{ color: p.stockQty === 0 ? c.danger : c.warn, fontWeight: "800", fontSize: 12 }}>
+                    {p.stockQty === 0 ? "Tugadi" : `${p.stockQty} ${p.unit}`}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
       {/* RECENT SALES */}
       <View style={{ paddingHorizontal: 20, marginTop: 28, marginBottom: 32 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <Text style={{ color: c.text, fontSize: 16, fontWeight: "800" }}>{t.home.recentSales}</Text>
-          <TouchableOpacity onPress={() => router.push("/(app)/sales")} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <TouchableOpacity onPress={() => router.push("/sales")} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Text style={{ color: c.primary, fontSize: 13, fontWeight: "600" }}>{t.home.allSales}</Text>
             <Ionicons name="chevron-forward" size={14} color={c.primary} />
           </TouchableOpacity>
