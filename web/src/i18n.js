@@ -394,7 +394,10 @@ i18n
         fallbackLng: 'uz',
         interpolation: {
             escapeValue: false
-        }
-    });
+        },
+        react: {
+            useSuspense: false,
+        },
+        });
 
 export default i18n;
