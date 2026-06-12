@@ -6,9 +6,9 @@ import { http } from "../http";
  */
 
 export const authApi = {
-  /** POST /api/auth/login */
-  login: (email, password) =>
-    http.post("/auth/login", { email, password }),
+  /** POST /api/auth/login (email or phone + password) */
+  login: (credentials) =>
+    http.post("/auth/login", credentials),
 
   /** POST /api/auth/logout */
   logout: () =>

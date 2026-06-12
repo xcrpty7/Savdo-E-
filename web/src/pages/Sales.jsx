@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShoppingCart, Plus, X, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Plus, X, ChevronDown, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import * as salesApi from '../api/sales.api';
@@ -166,7 +166,7 @@ export default function Sales() {
   const [showModal, setShowModal] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['sales-today', date],
     queryFn: () => salesApi.getSales({ date }),
     refetchInterval: 30000,
@@ -214,7 +214,13 @@ export default function Sales() {
           </div>
         )}
 
-        {isLoading ? (
+        {isError ? (
+          <div className="text-center py-16">
+            <AlertCircle size={40} className="mx-auto mb-3 text-red-400" />
+            <p className="font-semibold text-red-500">{t('error_loading')}</p>
+            <button onClick={() => refetch()} className="mt-3 text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
+          </div>
+        ) : isLoading ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="bg-white rounded-2xl border border-[#E2E8F0] p-4 animate-pulse flex justify-between">

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  SafeAreaView
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../store/ThemeContext';
 import { generateId } from '../utils/uuid';
-import { format } from 'date-fns';
-import { COLORS, SIZES } from '../constants/theme';
+import { SIZES, FONTS, COLORS } from '../constants/theme';
+import { formatPrice } from '../utils/formatPrice';
+import { getSettings } from '../store/settingsStore';
 import { getAllProducts, searchProducts, updateProductQuantity } from '../database/productQueries';
 import { createSale } from '../database/saleQueries';
 import { addToSyncQueue } from '../database/syncQueries';
+import { isOnline } from '../services/syncService';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 
 export default function NewSaleScreen({ navigation }) {
+  const { t } = useTranslation();
+  const { colors, themeId } = useTheme();
+  
+  const isDark = themeId === 'pos-dark'; 
+
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -30,6 +42,15 @@ export default function NewSaleScreen({ navigation }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [currency, setCurrency] = useState('UZS');
+
+  useEffect(() => {
+    const load = async () => {
+      const s = await getSettings();
+      setCurrency(s.currency || 'UZS');
+    };
+    load();
+  }, []);
 
   const loadProducts = useCallback(async (query = '') => {
     try {
@@ -52,7 +73,6 @@ export default function NewSaleScreen({ navigation }) {
       setNote('');
       setSearchQuery('');
       loadProducts('');
-      return () => {};
     }, [loadProducts])
   );
 
@@ -66,20 +86,21 @@ export default function NewSaleScreen({ navigation }) {
     setQuantity('1');
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 200,
+      duration: 300,
       useNativeDriver: true,
     }).start();
   };
 
   const clearSelection = () => {
-    setSelectedProduct(null);
-    setQuantity('1');
-    setNote('');
     Animated.timing(fadeAnim, {
       toValue: 0,
-      duration: 150,
+      duration: 200,
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      setSelectedProduct(null);
+      setQuantity('1');
+      setNote('');
+    });
   };
 
   const qty = parseFloat(quantity) || 0;
@@ -90,13 +111,20 @@ export default function NewSaleScreen({ navigation }) {
   const handleConfirmSale = async () => {
     if (!selectedProduct) return;
     if (qty <= 0) {
-      Alert.alert('Invalid Quantity', 'Please enter a valid quantity greater than 0.');
+      Alert.alert('Xatolik', 'Miqdorni to\'g\'ri kiriting');
       return;
     }
+
+    const online = await isOnline();
+    if (!online) {
+      Alert.alert('Internet yo\'q', 'Sotuvni amalga oshirish uchun internet tarmog\'iga ulaning. (Offline rejim vaqtincha o\'chirilgan)');
+      return;
+    }
+
     if (qty > Number(selectedProduct.quantity)) {
       Alert.alert(
-        'Insufficient Stock',
-        `Only ${Number(selectedProduct.quantity).toFixed(0)} ${selectedProduct.unit} available.`
+        'Omborda yetarli emas',
+        `${t('products.stock')}: ${Number(selectedProduct.quantity).toFixed(0)} ${selectedProduct.unit}`
       );
       return;
     }
@@ -109,7 +137,6 @@ export default function NewSaleScreen({ navigation }) {
 
       const sale = {
         id: saleId,
-        serverId: null,
         productId: selectedProduct.id,
         productName: selectedProduct.name,
         quantity: qty,
@@ -123,489 +150,309 @@ export default function NewSaleScreen({ navigation }) {
         synced: 0,
       };
 
-      // Save sale locally
       await createSale(sale);
-
-      // Deduct stock
       await updateProductQuantity(selectedProduct.id, newQty);
-
-      // Add to sync queue
       await addToSyncQueue('create', 'sale', saleId, sale);
-
-      // Update product sync queue
-      await addToSyncQueue('update', 'product', selectedProduct.id, {
-        ...selectedProduct,
-        quantity: newQty,
-        updatedAt: now,
-      });
-
-      // Show success and reset
+      
       Alert.alert(
-        'Sale Confirmed!',
-        `${selectedProduct.name}\n${qty} x $${Number(selectedProduct.sellPrice).toFixed(2)}\nProfit: $${profit.toFixed(2)}`,
+        t('sale.saleSuccess'),
+        `${selectedProduct.name}\n${qty} x ${formatPrice(Number(selectedProduct.sellPrice), currency)}`,
         [
-          {
-            text: 'New Sale',
-            onPress: () => {
-              clearSelection();
-              setSearchQuery('');
-              loadProducts('');
-            },
-          },
-          {
-            text: 'Dashboard',
-            onPress: () => navigation.navigate('Dashboard'),
-          },
+          { text: 'Yangi sotuv', onPress: clearSelection },
+          { text: 'Dashboard', onPress: () => navigation.navigate('Dashboard') }
         ]
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to record sale. Please try again.');
-      console.error('handleConfirmSale error:', error);
+      Alert.alert('Xatolik', 'Sotuvni saqlab bo\'lmadi');
     } finally {
       setSaving(false);
     }
   };
 
-  const getStockColor = (qty) => {
-    if (qty <= 0) return COLORS.danger;
-    if (qty <= 5) return COLORS.warning;
-    return COLORS.accent;
-  };
-
   const renderProduct = ({ item }) => {
-    const isSelected = selectedProduct?.id === item.id;
     const outOfStock = Number(item.quantity) <= 0;
     return (
       <TouchableOpacity
-        style={[
-          styles.productItem,
-          isSelected && styles.productItemSelected,
-          outOfStock && styles.productItemDisabled,
-        ]}
+        style={[styles.productCard, { backgroundColor: colors.card, borderColor: colors.border }, outOfStock && { opacity: 0.5 }]}
         onPress={() => !outOfStock && selectProduct(item)}
         disabled={outOfStock}
-        activeOpacity={0.7}
       >
-        <View style={styles.productItemLeft}>
-          <View style={[styles.productDot, { backgroundColor: getStockColor(item.quantity) }]} />
-          <View>
-            <Text style={styles.productItemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.productItemPrice}>${Number(item.sellPrice).toFixed(2)}</Text>
-          </View>
+        <View style={styles.productInfo}>
+          <Text style={[styles.productName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[styles.productPrice, { color: colors.accent }]}>{formatPrice(item.sellPrice, currency)}</Text>
         </View>
-        <View style={styles.productItemRight}>
-          <Text style={[styles.productItemStock, { color: getStockColor(item.quantity) }]}>
+        <View style={styles.productFooter}>
+          <Text style={[styles.productStock, { color: outOfStock ? colors.danger : colors.accent }]}>
             {Number(item.quantity).toFixed(0)} {item.unit}
           </Text>
-          {isSelected && (
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.accent} />
-          )}
+          <Ionicons name="add-circle" size={24} color={colors.accent} />
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* Search Input */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchWrapper}>
-          <Ionicons name="search-outline" size={20} color={COLORS.textMuted} style={styles.searchIcon} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={[styles.searchBar, { backgroundColor: colors.background }]}>
+          <Ionicons name="search" size={20} color={colors.textMuted} />
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search product to sell..."
-            placeholderTextColor={COLORS.textMuted}
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Mahsulot qidirish..."
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={handleSearch}
-            autoFocus={false}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch('')}>
-              <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
-      {/* Product List */}
-      {!selectedProduct ? (
-        loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={COLORS.accent} size="large" />
-          </View>
-        ) : products.length === 0 ? (
-          <View style={styles.centered}>
-            <Ionicons name="cube-outline" size={56} color={COLORS.border} />
-            <Text style={styles.emptyText}>No products found</Text>
-            <Text style={styles.emptySubText}>Add products first from the Products screen</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={products}
-            keyExtractor={(item) => item.id}
-            renderItem={renderProduct}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-        )
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={colors.accent} size="large" />
+        </View>
       ) : (
-        /* Sale Detail Panel */
-        <Animated.View style={[styles.salePanel, { opacity: fadeAnim }]}>
-          {/* Selected Product Header */}
-          <View style={styles.selectedHeader}>
-            <View style={styles.selectedInfo}>
-              <View style={styles.selectedIconBg}>
-                <Ionicons name="cube" size={22} color={COLORS.accent} />
-              </View>
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          renderItem={renderProduct}
+          numColumns={2}
+          contentContainerStyle={styles.productList}
+          columnWrapperStyle={styles.productRow}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {selectedProduct && (
+        <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.selectedName}>{selectedProduct.name}</Text>
-                <Text style={styles.selectedStock}>
-                  In stock: {Number(selectedProduct.quantity).toFixed(0)} {selectedProduct.unit}
-                </Text>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>{selectedProduct.name}</Text>
+                <Text style={[styles.modalSubTitle, { color: colors.textMuted }]}>{formatPrice(selectedProduct.sellPrice, currency)} / {selectedProduct.unit}</Text>
+              </View>
+              <TouchableOpacity onPress={clearSelection}>
+                <Ionicons name="close-circle" size={32} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.qtyContainer}>
+              <Text style={[styles.label, { color: colors.textMuted }]}>Miqdori</Text>
+              <View style={styles.qtyControls}>
+                <TouchableOpacity 
+                  style={[styles.qtyBtn, { backgroundColor: colors.border }]} 
+                  onPress={() => setQuantity(v => String(Math.max(1, (parseFloat(v) || 1) - 1)))}
+                >
+                  <Ionicons name="remove" size={28} color={colors.text} />
+                </TouchableOpacity>
+                <TextInput
+                  style={[styles.qtyInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  keyboardType="decimal-pad"
+                  textAlign="center"
+                />
+                <TouchableOpacity 
+                  style={[styles.qtyBtn, { backgroundColor: colors.border }]} 
+                  onPress={() => setQuantity(v => String((parseFloat(v) || 0) + 1))}
+                >
+                  <Ionicons name="add" size={28} color={colors.text} />
+                </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity onPress={clearSelection} style={styles.changeBtn}>
-              <Text style={styles.changeBtnText}>Change</Text>
-            </TouchableOpacity>
+
+            <View style={[styles.summaryCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Jami summa:</Text>
+                <Text style={[styles.summaryValue, { color: colors.text }]}>{formatPrice(revenue, currency)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Foyda:</Text>
+                <Text style={[styles.summaryValue, { color: colors.accent }]}>+{formatPrice(profit, currency)}</Text>
+              </View>
+            </View>
+
+            <TextInput
+              style={[styles.noteInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+              placeholder="Izoh (ixtiyoriy)..."
+              placeholderTextColor={colors.textMuted}
+              value={note}
+              onChangeText={setNote}
+            />
+
+            <Button
+              title="Sotuvni tasdiqlash"
+              onPress={handleConfirmSale}
+              loading={saving}
+              variant={isDark ? "pos" : "primary"}
+              style={{ height: 56, borderRadius: 16 }}
+            />
           </View>
-
-          {/* Quantity */}
-          <View style={styles.qtySection}>
-            <Text style={styles.qtyLabel}>Quantity</Text>
-            <View style={styles.qtyRow}>
-              <TouchableOpacity
-                style={styles.qtyBtn}
-                onPress={() => setQuantity(v => String(Math.max(1, (parseFloat(v) || 1) - 1)))}
-              >
-                <Ionicons name="remove" size={22} color={COLORS.text} />
-              </TouchableOpacity>
-              <TextInput
-                style={styles.qtyInput}
-                value={quantity}
-                onChangeText={setQuantity}
-                keyboardType="decimal-pad"
-                textAlign="center"
-                selectTextOnFocus
-              />
-              <TouchableOpacity
-                style={styles.qtyBtn}
-                onPress={() => {
-                  const max = Number(selectedProduct.quantity);
-                  setQuantity(v => String(Math.min(max, (parseFloat(v) || 0) + 1)));
-                }}
-              >
-                <Ionicons name="add" size={22} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Calculations */}
-          <View style={styles.calcCard}>
-            <View style={styles.calcRow}>
-              <Text style={styles.calcLabel}>Price per unit</Text>
-              <Text style={styles.calcValue}>${Number(selectedProduct.sellPrice).toFixed(2)}</Text>
-            </View>
-            <View style={styles.calcRow}>
-              <Text style={styles.calcLabel}>Revenue</Text>
-              <Text style={styles.calcValue}>${revenue.toFixed(2)}</Text>
-            </View>
-            <View style={styles.calcRow}>
-              <Text style={styles.calcLabel}>Cost</Text>
-              <Text style={styles.calcValue}>${cost.toFixed(2)}</Text>
-            </View>
-            <View style={[styles.calcRow, styles.calcRowAccent]}>
-              <Text style={styles.calcLabelBig}>Profit</Text>
-              <Text style={styles.calcProfit}>${profit.toFixed(2)}</Text>
-            </View>
-          </View>
-
-          {/* Note */}
-          <TextInput
-            style={styles.noteInput}
-            placeholder="Add note (optional)"
-            placeholderTextColor={COLORS.textMuted}
-            value={note}
-            onChangeText={setNote}
-            maxLength={120}
-          />
-
-          {/* Confirm Button */}
-          <TouchableOpacity
-            style={[styles.confirmButton, saving && styles.confirmButtonDisabled]}
-            onPress={handleConfirmSale}
-            disabled={saving}
-            activeOpacity={0.8}
-          >
-            {saving ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
-                <Text style={styles.confirmButtonText}>Confirm Sale</Text>
-              </>
-            )}
-          </TouchableOpacity>
         </Animated.View>
       )}
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.pos.bg,
   },
-  searchSection: {
+  header: {
     padding: 16,
-    paddingBottom: 8,
+    backgroundColor: COLORS.pos.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.pos.border,
   },
-  searchWrapper: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.pos.bg,
+    borderRadius: 12,
     paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
+    height: 48,
   },
   searchInput: {
     flex: 1,
-    height: 52,
-    color: COLORS.text,
-    fontSize: SIZES.base,
+    marginLeft: 10,
+    color: '#fff',
+    fontSize: 16,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
-  emptyText: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.base,
-    fontWeight: '600',
+  productList: {
+    padding: 12,
+    paddingBottom: 100,
   },
-  emptySubText: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.sm,
-    textAlign: 'center',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  productItem: {
-    backgroundColor: COLORS.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
+  productRow: {
     justifyContent: 'space-between',
+  },
+  productCard: {
+    backgroundColor: COLORS.pos.card,
+    borderRadius: 16,
+    padding: 12,
+    width: '48%',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.pos.border,
+    justifyContent: 'space-between',
+    minHeight: 120,
+  },
+  productInfo: {
     marginBottom: 8,
   },
-  productItemSelected: {
-    borderColor: COLORS.accent,
-    backgroundColor: '#1a3a2a',
+  productName: {
+    color: '#fff',
+    fontSize: 14,
+    ...FONTS.semibold,
   },
-  productItemDisabled: {
-    opacity: 0.4,
+  productPrice: {
+    color: COLORS.pos.accent,
+    fontSize: 15,
+    ...FONTS.bold,
+    marginTop: 4,
   },
-  productItemLeft: {
+  productFooter: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  productDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  productItemName: {
-    color: COLORS.text,
-    fontSize: SIZES.base,
-    fontWeight: '600',
-    maxWidth: 180,
-  },
-  productItemPrice: {
-    color: COLORS.accent,
-    fontSize: SIZES.sm,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  productItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  productItemStock: {
-    fontSize: SIZES.sm,
-    fontWeight: '600',
-  },
-  salePanel: {
-    flex: 1,
-    padding: 16,
-  },
-  selectedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    padding: 14,
-    marginBottom: 16,
+    alignItems: 'center',
   },
-  selectedInfo: {
+  productStock: {
+    fontSize: 12,
+    ...FONTS.medium,
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.pos.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 20,
+    ...FONTS.bold,
+  },
+  modalSubTitle: {
+    color: COLORS.pos.muted,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  qtyContainer: {
+    marginBottom: 24,
+  },
+  label: {
+    color: COLORS.pos.muted,
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  qtyControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  selectedIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedName: {
-    color: COLORS.text,
-    fontSize: SIZES.base,
-    fontWeight: '700',
-    maxWidth: 200,
-  },
-  selectedStock: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.sm,
-    marginTop: 2,
-  },
-  changeBtn: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  changeBtnText: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.sm,
-    fontWeight: '600',
-  },
-  qtySection: {
-    marginBottom: 16,
-  },
-  qtyLabel: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.sm,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   qtyBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: COLORS.pos.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyInput: {
     flex: 1,
-    height: 52,
-    backgroundColor: COLORS.card,
+    height: 56,
+    backgroundColor: COLORS.pos.bg,
+    borderRadius: 16,
+    color: '#fff',
+    fontSize: 24,
+    ...FONTS.bold,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    color: COLORS.text,
-    fontSize: SIZES.xxl,
-    fontWeight: '700',
-    textAlign: 'center',
+    borderColor: COLORS.pos.border,
   },
-  calcCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
+  summaryCard: {
+    backgroundColor: COLORS.pos.bg,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    marginBottom: 12,
+    borderColor: COLORS.pos.border,
   },
-  calcRow: {
+  summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    marginBottom: 8,
   },
-  calcRowAccent: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    marginTop: 6,
-    paddingTop: 12,
+  summaryLabel: {
+    color: COLORS.pos.muted,
+    fontSize: 14,
   },
-  calcLabel: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.md,
-  },
-  calcValue: {
-    color: COLORS.text,
-    fontSize: SIZES.md,
-    fontWeight: '600',
-  },
-  calcLabelBig: {
-    color: COLORS.text,
-    fontSize: SIZES.base,
-    fontWeight: '700',
-  },
-  calcProfit: {
-    color: COLORS.accent,
-    fontSize: SIZES.xl,
-    fontWeight: '700',
+  summaryValue: {
+    color: '#fff',
+    fontSize: 16,
+    ...FONTS.bold,
   },
   noteInput: {
-    backgroundColor: COLORS.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 14,
-    height: 46,
-    color: COLORS.text,
-    fontSize: SIZES.md,
-    marginBottom: 16,
-  },
-  confirmButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    height: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  confirmButtonDisabled: {
-    opacity: 0.6,
-  },
-  confirmButtonText: {
+    backgroundColor: COLORS.pos.bg,
+    borderRadius: 12,
+    padding: 12,
     color: '#fff',
-    fontSize: SIZES.lg,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.pos.border,
+  }
 });

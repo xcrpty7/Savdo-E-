@@ -37,6 +37,38 @@ const useAuthStore = create(
         }
       },
 
+      googleLogin: async (credential) => {
+        set({ isLoading: true });
+        try {
+          const res = await authApi.googleAuth(credential);
+          const { user, accessToken, refreshToken } = res.data.data;
+          localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', refreshToken);
+          set({ user, accessToken, refreshToken, isLoading: false });
+          toast.success(`Xush kelibsiz, ${user.name}!`);
+
+          if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+            const adminUrl = import.meta.env.VITE_ADMIN_URL || 'http://localhost:5174';
+            const params = new URLSearchParams({
+              token:   accessToken,
+              refresh: refreshToken,
+              name:    user.name  || '',
+              email:   user.email || '',
+              role:    user.role  || '',
+            });
+            window.location.href = `${adminUrl}/sso?${params.toString()}`;
+            return user;
+          }
+
+          return user;
+        } catch (err) {
+          set({ isLoading: false });
+          const message = err.response?.data?.message || 'Google orqali kirish muvaffaqiyatsiz';
+          toast.error(message);
+          throw err;
+        }
+      },
+
       login: async (credentials) => {
         set({ isLoading: true });
         try {
@@ -46,6 +78,21 @@ const useAuthStore = create(
           localStorage.setItem('refreshToken', refreshToken);
           set({ user, accessToken, refreshToken, isLoading: false });
           toast.success(`Welcome back, ${user.name}!`);
+
+          // ADMIN / SUPER_ADMIN — admin panelga SSO orqali yo'naltirish
+          if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+            const adminUrl = import.meta.env.VITE_ADMIN_URL || 'http://localhost:5174';
+            const params = new URLSearchParams({
+              token:   accessToken,
+              refresh: refreshToken,
+              name:    user.name  || '',
+              email:   user.email || '',
+              role:    user.role  || '',
+            });
+            window.location.href = `${adminUrl}/sso?${params.toString()}`;
+            return user;
+          }
+
           return user;
         } catch (err) {
           set({ isLoading: false });

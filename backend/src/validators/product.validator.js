@@ -27,7 +27,6 @@ const updateProductSchema = Joi.object({
   name: Joi.string().trim().max(200),
   buyPrice: Joi.number().min(0),
   sellPrice: Joi.number().min(0),
-  stock: Joi.number().integer().min(0),
   unit: Joi.string().trim(),
   description: Joi.string().trim().max(5000).allow(''),
   price: Joi.number().min(0),

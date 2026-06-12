@@ -1,53 +1,80 @@
-const Wishlist = require('../models/Wishlist.model');
-const Product = require('../models/Product.model');
+const prisma = require('../config/prisma');
 const ApiError = require('../utils/ApiError');
 
 const getWishlist = async (userId) => {
-  const wishlist = await Wishlist.findOne({ user: userId }).populate(
-    'products',
-    'name images finalPrice rating isActive'
-  );
-  if (!wishlist) return { user: userId, products: [] };
+  const wishlist = await prisma.wishlist.findUnique({
+    where: { userId },
+    include: {
+      products: {
+        select: {
+          id: true,
+          name: true,
+          images: true,
+          finalPrice: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (!wishlist) return { userId, products: [] };
   return wishlist;
 };
 
 const toggleWishlist = async (userId, productId) => {
-  const product = await Product.findById(productId);
+  const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product || !product.isActive) {
     throw new ApiError(404, 'Product not found');
   }
 
-  let wishlist = await Wishlist.findOne({ user: userId });
-  if (!wishlist) {
-    wishlist = new Wishlist({ user: userId, products: [] });
-  }
+  const wishlist = await prisma.wishlist.upsert({
+    where: { userId },
+    update: {},
+    create: { userId },
+    include: { products: true },
+  });
 
-  const index = wishlist.products.findIndex(
-    (id) => id.toString() === productId.toString()
-  );
+  const exists = wishlist.products.some((p) => p.id === productId);
 
   let action;
-  if (index > -1) {
-    wishlist.products.splice(index, 1);
+  let updatedWishlist;
+
+  if (exists) {
+    updatedWishlist = await prisma.wishlist.update({
+      where: { userId },
+      data: {
+        products: { disconnect: { id: productId } },
+      },
+      include: { products: true },
+    });
     action = 'removed';
   } else {
-    wishlist.products.push(productId);
+    updatedWishlist = await prisma.wishlist.update({
+      where: { userId },
+      data: {
+        products: { connect: { id: productId } },
+      },
+      include: { products: true },
+    });
     action = 'added';
   }
 
-  await wishlist.save();
-  return { action, wishlist };
+  return { action, wishlist: updatedWishlist };
 };
 
 const removeFromWishlist = async (userId, productId) => {
-  const wishlist = await Wishlist.findOne({ user: userId });
-  if (!wishlist) throw new ApiError(404, 'Wishlist not found');
-
-  wishlist.products = wishlist.products.filter(
-    (id) => id.toString() !== productId.toString()
-  );
-  await wishlist.save();
-  return wishlist;
+  try {
+    const updatedWishlist = await prisma.wishlist.update({
+      where: { userId },
+      data: {
+        products: { disconnect: { id: productId } },
+      },
+      include: { products: true },
+    });
+    return updatedWishlist;
+  } catch (err) {
+    throw new ApiError(404, 'Wishlist or product not found');
+  }
 };
 
 module.exports = { getWishlist, toggleWishlist, removeFromWishlist };

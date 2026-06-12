@@ -243,6 +243,9 @@ export const uz = {
     pillRoleAware: "Role-aware route'lar",
     stats: {
       totalUsers: "Jami foydalanuvchilar",
+      totalProducts: "Jami mahsulotlar",
+      totalOrders: "Jami buyurtmalar",
+      totalRevenue: "Umumiy daromad",
       admins: "Adminlar",
       auditLogs: "Audit loglar",
       notifications: "Bildirishnomalar",

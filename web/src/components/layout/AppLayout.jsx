@@ -1,56 +1,28 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, Package, ShoppingCart, BarChart2, LogOut, Globe } from 'lucide-react';
+import { Home, Package, ShoppingCart, BarChart2, Settings, User, ShieldCheck, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../../store/authStore';
 
-function LanguageSwitcher() {
-  const { i18n } = useTranslation();
-
-  const langs = [
-    { code: 'uz', label: 'UZ' },
-    { code: 'ru', label: 'RU' },
-    { code: 'en', label: 'EN' }
-  ];
-
-  return (
-    <div className="flex gap-1 p-1 bg-slate-100 rounded-xl overflow-hidden">
-      {langs.map((l) => (
-        <button
-          key={l.code}
-          onClick={() => i18n.changeLanguage(l.code)}
-          className={`flex-1 text-[10px] font-bold py-1.5 rounded-lg transition ${i18n.language.startsWith(l.code)
-            ? 'bg-white text-green-600 shadow-sm'
-            : 'text-slate-500 hover:bg-white/50'
-            }`}
-        >
-          {l.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-
 function NavItem({ item, mobile = false }) {
   const Icon = item.icon;
+
   if (mobile) {
     return (
       <NavLink
         to={item.to}
         end={item.to === '/'}
         className={({ isActive }) =>
-          `flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all min-w-[60px] ${isActive
-            ? 'text-green-600'
-            : 'text-slate-500 hover:text-green-600'
+          `flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all min-w-[52px] ${
+            isActive ? 'text-green-600' : 'text-slate-400 hover:text-green-600'
           }`
         }
       >
         {({ isActive }) => (
           <>
             <div className={`p-1.5 rounded-lg transition-colors ${isActive ? 'bg-green-50' : ''}`}>
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+              <Icon size={21} strokeWidth={isActive ? 2.5 : 2} />
             </div>
-            <span className="text-[11px] font-medium">{item.label}</span>
+            <span className="text-[10px] font-semibold leading-tight">{item.label}</span>
           </>
         )}
       </NavLink>
@@ -62,85 +34,133 @@ function NavItem({ item, mobile = false }) {
       to={item.to}
       end={item.to === '/'}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all ${isActive
-          ? 'bg-green-500 text-white shadow-sm'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          isActive
+            ? 'bg-green-500 text-white shadow-sm'
+            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
         }`
       }
     >
-      <Icon size={20} strokeWidth={2} />
+      <Icon size={18} strokeWidth={2} />
       <span>{item.label}</span>
     </NavLink>
   );
 }
 
 export default function AppLayout() {
-  const { t, i18n } = useTranslation();
-  const logout = useAuthStore((s) => s.logout);
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(user?.role);
+
+  const navItems = [
+    { to: '/',         label: t('dashboard'), icon: Home },
+    { to: '/products', label: t('products'),  icon: Package },
+    { to: '/sales',    label: t('sales'),     icon: ShoppingCart },
+    { to: '/reports',  label: t('reports'),   icon: BarChart2 },
+    { to: '/settings', label: t('settings'),  icon: Settings },
+    { to: '/profile',  label: t('profile'),   icon: User },
+  ];
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const translatedNavItems = [
-    { to: '/', label: t('dashboard'), icon: Home },
-    { to: '/products', label: t('products'), icon: Package },
-    { to: '/sales', label: t('sales'), icon: ShoppingCart },
-    { to: '/reports', label: t('reports'), icon: BarChart2 },
-  ];
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex">
-      {/* ── Desktop Sidebar ─────────────────────────────────── */}
+
+      {/* ── Desktop Sidebar ──────────────────────── */}
       <aside className="hidden md:flex flex-col w-[220px] min-h-screen bg-white border-r border-[#E2E8F0] fixed left-0 top-0 bottom-0 z-30">
         {/* Logo */}
-        <div className="px-5 py-6 border-b border-[#E2E8F0] flex items-center justify-between">
+        <div className="px-5 py-6 border-b border-[#E2E8F0]">
           <span className="text-2xl font-extrabold text-green-500 tracking-tight">SAVDO</span>
-          <Globe size={18} className="text-slate-300" />
+          <p className="text-[11px] text-slate-400 font-medium mt-0.5">Business Manager</p>
+        </div>
+
+        {/* User info */}
+        <div className="px-4 py-3 border-b border-[#E2E8F0] flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm flex-shrink-0">
+            {user?.name?.[0]?.toUpperCase() || 'U'}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-700 truncate">{user?.name}</p>
+            <p className="text-[10px] text-slate-400 truncate">{user?.role}</p>
+          </div>
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
-          {translatedNavItems.map((item) => (
+        <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
+          {navItems.map((item) => (
             <NavItem key={item.to} item={item} />
           ))}
+
+          {/* Admin section */}
+          {isAdmin && (
+            <>
+              <div className="mt-4 mb-1 px-3">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Admin</p>
+              </div>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    isActive
+                      ? 'bg-indigo-500 text-white shadow-sm'
+                      : 'text-indigo-500 hover:bg-indigo-50'
+                  }`
+                }
+              >
+                <ShieldCheck size={18} strokeWidth={2} />
+                <span>Admin Panel</span>
+              </NavLink>
+            </>
+          )}
         </nav>
 
-        {/* Language & Logout */}
-        <div className="px-3 py-4 border-t border-[#E2E8F0] flex flex-col gap-3">
-          <LanguageSwitcher />
+        {/* Logout */}
+        <div className="px-3 py-3 border-t border-[#E2E8F0]">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 transition-all"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all"
           >
-            <LogOut size={20} />
-            <span>{t('logout')}</span>
+            <LogOut size={18} strokeWidth={2} />
+            <span>Chiqish</span>
           </button>
         </div>
       </aside>
 
-      {/* ── Main content ────────────────────────────────────── */}
+      {/* ── Main content ─────────────────────────── */}
       <main className="flex-1 md:ml-[220px] pb-20 md:pb-0">
         <Outlet />
       </main>
 
-      {/* ── Mobile Bottom Tab Bar ───────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E2E8F0] z-30 flex items-center justify-around px-2 py-1 safe-area-pb">
-        {translatedNavItems.map((item) => (
+      {/* ── Mobile Bottom Tab Bar ────────────────── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E2E8F0] z-30 flex items-center justify-around px-1 py-1 safe-area-pb">
+        {navItems.slice(0, 5).map((item) => (
           <NavItem key={item.to} item={item} mobile />
         ))}
-        {/* Simple mobile lang toggle */}
-        <button
-          onClick={() => {
-            const current = i18n.language.startsWith('uz') ? 'ru' : i18n.language.startsWith('ru') ? 'en' : 'uz';
-            i18n.changeLanguage(current);
-          }}
-          className="p-3 text-slate-500 font-bold text-xs"
-        >
-          {i18n.language.substring(0, 2).toUpperCase()}
-        </button>
+        {isAdmin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all min-w-[52px] ${
+                isActive ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <div className={`p-1.5 rounded-lg transition-colors ${isActive ? 'bg-indigo-50' : ''}`}>
+                  <ShieldCheck size={21} strokeWidth={isActive ? 2.5 : 2} />
+                </div>
+                <span className="text-[10px] font-semibold leading-tight">Admin</span>
+              </>
+            )}
+          </NavLink>
+        )}
       </nav>
 
     </div>

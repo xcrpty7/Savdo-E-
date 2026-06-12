@@ -1,6 +1,4 @@
-const Order = require('../models/Order.model');
-const Product = require('../models/Product.model');
-const Cart = require('../models/Cart.model');
+const prisma = require('../config/prisma');
 const ApiError = require('../utils/ApiError');
 
 const TAX_RATE = 0.1;
@@ -8,119 +6,171 @@ const SHIPPING_THRESHOLD = 50;
 const SHIPPING_COST = 5;
 
 const createOrder = async (userId, { items, shippingAddress, paymentMethod, notes }) => {
-  // Resolve products and validate stock
-  const resolvedItems = [];
-  let itemsPrice = 0;
+  return await prisma.$transaction(async (tx) => {
+    const resolvedItems = [];
+    let itemsPrice = 0;
 
-  for (const item of items) {
-    const product = await Product.findById(item.product);
-    if (!product || !product.isActive) {
-      throw new ApiError(404, `Product ${item.product} not found`);
-    }
-    if (product.stock < item.quantity) {
-      throw new ApiError(400, `Insufficient stock for "${product.name}"`);
+    for (const item of items) {
+      const product = await tx.product.findUnique({ where: { id: item.product } });
+      if (!product || !product.isActive) {
+        throw new ApiError(404, `Product ${item.product} not found`);
+      }
+      if (product.stock < item.quantity) {
+        throw new ApiError(400, `Insufficient stock for "${product.name}"`);
+      }
+
+      resolvedItems.push({
+        productId: product.id,
+        name: product.name,
+        image: product.images[0]?.url || '',
+        price: product.finalPrice,
+        quantity: item.quantity,
+      });
+
+      itemsPrice += product.finalPrice * item.quantity;
+
+      // Deduct stock
+      await tx.product.update({
+        where: { id: product.id },
+        data: { stock: { decrement: item.quantity } },
+      });
     }
 
-    resolvedItems.push({
-      product: product._id,
-      name: product.name,
-      image: product.images[0]?.url || '',
-      price: product.finalPrice,
-      quantity: item.quantity,
+    const shippingPrice = itemsPrice >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
+    const taxPrice = Math.round(itemsPrice * TAX_RATE * 100) / 100;
+    const totalPrice = Math.round((itemsPrice + shippingPrice + taxPrice) * 100) / 100;
+
+    // Generate order number
+    const count = await tx.order.count();
+    const orderNumber = `ORD-${Date.now()}-${String(count + 1).padStart(5, '0')}`;
+
+    const order = await tx.order.create({
+      data: {
+        userId,
+        orderNumber,
+        paymentMethod,
+        notes,
+        itemsPrice,
+        shippingPrice,
+        taxPrice,
+        totalPrice,
+        items: {
+          create: resolvedItems,
+        },
+        shippingAddress: {
+          create: shippingAddress,
+        },
+      },
+      include: {
+        items: true,
+        shippingAddress: true,
+      },
     });
 
-    itemsPrice += product.finalPrice * item.quantity;
+    // Clear cart
+    const cart = await tx.cart.findUnique({ where: { userId } });
+    if (cart) {
+      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+      await tx.cart.update({
+        where: { id: cart.id },
+        data: { totalItems: 0, totalPrice: 0 },
+      });
+    }
 
-    // Deduct stock
-    product.stock -= item.quantity;
-    await product.save({ validateBeforeSave: false });
-  }
-
-  const shippingPrice = itemsPrice >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
-  const taxPrice = Math.round(itemsPrice * TAX_RATE * 100) / 100;
-  const totalPrice = Math.round((itemsPrice + shippingPrice + taxPrice) * 100) / 100;
-
-  const order = await Order.create({
-    user: userId,
-    items: resolvedItems,
-    shippingAddress,
-    paymentMethod,
-    notes,
-    itemsPrice,
-    shippingPrice,
-    taxPrice,
-    totalPrice,
+    return order;
   });
-
-  // Clear cart after successful order
-  await Cart.findOneAndUpdate({ user: userId }, { items: [], totalItems: 0, totalPrice: 0 });
-
-  return order;
 };
 
 const getUserOrders = async (userId, { page = 1, limit = 10 } = {}) => {
   const skip = (Number(page) - 1) * Number(limit);
+  const take = Number(limit);
+
   const [orders, total] = await Promise.all([
-    Order.find({ user: userId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .populate('items.product', 'name images'),
-    Order.countDocuments({ user: userId }),
+    prisma.order.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+      include: {
+        items: { include: { product: true } },
+      },
+    }),
+    prisma.order.count({ where: { userId } }),
   ]);
 
-  return { orders, total, page: Number(page), pages: Math.ceil(total / Number(limit)) };
+  return { orders, total, page: Number(page), pages: Math.ceil(total / take) };
 };
 
 const getOrderById = async (orderId, userId, role) => {
-  const query = { _id: orderId };
+  const where = { id: orderId };
   if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
-    query.user = userId;
+    where.userId = userId;
   }
 
-  const order = await Order.findOne(query)
-    .populate('user', 'name email')
-    .populate('items.product', 'name images');
+  const order = await prisma.order.findUnique({
+    where,
+    include: {
+      user: { select: { name: true, email: true } },
+      items: { include: { product: true } },
+      shippingAddress: true,
+    },
+  });
 
   if (!order) throw new ApiError(404, 'Order not found');
   return order;
 };
 
 const updateOrderStatus = async (orderId, { orderStatus, paymentStatus }) => {
-  const order = await Order.findById(orderId);
-  if (!order) throw new ApiError(404, 'Order not found');
-
+  const data = {};
   if (orderStatus) {
-    order.orderStatus = orderStatus;
-    if (orderStatus === 'delivered') order.deliveredAt = new Date();
-    if (orderStatus === 'paid') order.paidAt = new Date();
+    data.orderStatus = orderStatus;
+    if (orderStatus === 'delivered') data.deliveredAt = new Date();
+    if (orderStatus === 'paid') data.paidAt = new Date();
   }
   if (paymentStatus) {
-    order.paymentStatus = paymentStatus;
-    if (paymentStatus === 'paid') order.paidAt = new Date();
+    data.paymentStatus = paymentStatus;
+    if (paymentStatus === 'paid') data.paidAt = new Date();
   }
 
-  await order.save();
-  return order;
+  try {
+    const order = await prisma.order.update({
+      where: { id: orderId },
+      data,
+    });
+    return order;
+  } catch (err) {
+    throw new ApiError(404, 'Order not found');
+  }
 };
 
 const cancelOrder = async (orderId, userId) => {
-  const order = await Order.findOne({ _id: orderId, user: userId });
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, userId },
+    include: { items: true },
+  });
+
   if (!order) throw new ApiError(404, 'Order not found');
 
   if (['shipped', 'delivered'].includes(order.orderStatus)) {
     throw new ApiError(400, 'Cannot cancel an order that has been shipped or delivered');
   }
 
-  order.orderStatus = 'cancelled';
-  await order.save();
+  return await prisma.$transaction(async (tx) => {
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { orderStatus: 'cancelled' },
+    });
 
-  // Restore product stock
-  for (const item of order.items) {
-    await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
-  }
+    // Restore product stock
+    for (const item of order.items) {
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      });
+    }
 
-  return order;
+    return updatedOrder;
+  });
 };
 
 module.exports = {

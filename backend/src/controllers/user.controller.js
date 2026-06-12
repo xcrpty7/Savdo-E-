@@ -3,29 +3,29 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiResponse = require('../utils/ApiResponse');
 
 const getProfile = asyncHandler(async (req, res) => {
-  const user = await userService.getProfile(req.user._id);
+  const user = await userService.getProfile(req.user.id);
   res.status(200).json(new ApiResponse(200, { user }, 'Profile retrieved'));
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const user = await userService.updateProfile(req.user._id, req.body);
+  const user = await userService.updateProfile(req.user.id, req.body);
   res.status(200).json(new ApiResponse(200, { user }, 'Profile updated'));
 });
 
 const changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  const result = await userService.changePassword(req.user._id, currentPassword, newPassword);
+  const result = await userService.changePassword(req.user.id, currentPassword, newPassword);
   res.status(200).json(new ApiResponse(200, result, result.message));
 });
 
 const addAddress = asyncHandler(async (req, res) => {
-  const addresses = await userService.addAddress(req.user._id, req.body);
+  const addresses = await userService.addAddress(req.user.id, req.body);
   res.status(201).json(new ApiResponse(201, { addresses }, 'Address added'));
 });
 
 const updateAddress = asyncHandler(async (req, res) => {
   const addresses = await userService.updateAddress(
-    req.user._id,
+    req.user.id,
     req.params.addressId,
     req.body
   );
@@ -33,7 +33,7 @@ const updateAddress = asyncHandler(async (req, res) => {
 });
 
 const deleteAddress = asyncHandler(async (req, res) => {
-  const addresses = await userService.deleteAddress(req.user._id, req.params.addressId);
+  const addresses = await userService.deleteAddress(req.user.id, req.params.addressId);
   res.status(200).json(new ApiResponse(200, { addresses }, 'Address deleted'));
 });
 

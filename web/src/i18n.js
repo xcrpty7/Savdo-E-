@@ -127,7 +127,20 @@ const resources = {
             "sales_list": "Savdolar ro'yxati",
             "by_products": "Mahsulotlar bo'yicha",
             "sale_unit": "savdo",
-            "no_sales_month": "Bu oyda savdo yo'q"
+            "no_sales_month": "Bu oyda savdo yo'q",
+
+            // Settings
+            "settings": "Sozlamalar",
+            "profile": "Profil",
+            "about": "Dastur haqida",
+            "app_name": "Dastur",
+            "version": "Versiya",
+            "role_user": "Foydalanuvchi",
+            "role_admin": "Admin",
+            "role_super_admin": "Super Admin",
+            "total_profit": "Jami foyda",
+            "error_loading": "Ma'lumot yuklanmadi",
+            "retry": "Qayta urinish"
         }
     },
     ru: {
@@ -254,7 +267,20 @@ const resources = {
             "sales_list": "Список продаж",
             "by_products": "По товарам",
             "sale_unit": "продаж",
-            "no_sales_month": "В этом месяце нет продаж"
+            "no_sales_month": "В этом месяце нет продаж",
+
+            // Settings
+            "settings": "Настройки",
+            "profile": "Профиль",
+            "about": "О приложении",
+            "app_name": "Приложение",
+            "version": "Версия",
+            "role_user": "Пользователь",
+            "role_admin": "Админ",
+            "role_super_admin": "Супер Админ",
+            "total_profit": "Общая прибыль",
+            "error_loading": "Ошибка загрузки",
+            "retry": "Повторить"
         }
     },
     en: {
@@ -381,7 +407,20 @@ const resources = {
             "sales_list": "Sales List",
             "by_products": "By Products",
             "sale_unit": "sales",
-            "no_sales_month": "No sales this month"
+            "no_sales_month": "No sales this month",
+
+            // Settings
+            "settings": "Settings",
+            "profile": "Profile",
+            "about": "About",
+            "app_name": "Application",
+            "version": "Version",
+            "role_user": "User",
+            "role_admin": "Admin",
+            "role_super_admin": "Super Admin",
+            "total_profit": "Total Profit",
+            "error_loading": "Failed to load data",
+            "retry": "Retry"
         }
     }
 };
@@ -394,10 +433,7 @@ i18n
         fallbackLng: 'uz',
         interpolation: {
             escapeValue: false
-        },
-        react: {
-            useSuspense: false,
-        },
-        });
+        }
+    });
 
 export default i18n;

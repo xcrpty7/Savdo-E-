@@ -1,11 +1,12 @@
 const rateLimit = require('express-rate-limit');
 
 /**
- * General API rate limiter — 100 requests per 15 minutes
+ * General API rate limiter — 1000 requests per 15 minutes
+ * (Admin panel polls every 5s, so 100 was too restrictive)
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -16,11 +17,11 @@ const apiLimiter = rateLimit({
 });
 
 /**
- * Strict auth rate limiter — 10 attempts per 15 minutes
+ * Strict auth rate limiter — 20 attempts per 15 minutes
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

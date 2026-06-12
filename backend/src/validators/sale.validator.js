@@ -1,7 +1,7 @@
 const Joi = require('joi');
 
 const createSaleSchema = Joi.object({
-  product: Joi.string().length(24).hex(),
+  product: Joi.string(),
   productName: Joi.string().trim().required(),
   quantity: Joi.number().positive().required(),
   sellPrice: Joi.number().min(0).required(),

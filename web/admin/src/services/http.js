@@ -45,13 +45,14 @@ http.interceptors.response.use(
           { refreshToken: auth.refreshToken }
         );
 
-        const updated = { ...auth, token: data.token };
+        const newToken = data.data?.accessToken || data.accessToken;
+        const updated = { ...auth, token: newToken, refreshToken: data.data?.refreshToken || auth.refreshToken };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        original.headers.Authorization = `Bearer ${data.token}`;
+        original.headers.Authorization = `Bearer ${newToken}`;
         return http(original);
       } catch {
         localStorage.removeItem(STORAGE_KEY);
-        window.location.href = "/";
+        window.dispatchEvent(new Event("auth:logout"));
         return Promise.reject(error);
       }
     }

@@ -9,24 +9,23 @@ const errorMiddleware = (err, req, res, next) => {
     let statusCode = 500;
     let message = error.message || 'Internal Server Error';
 
-    // Mongoose validation error
-    if (error.name === 'ValidationError') {
-      statusCode = 422;
-      const errors = Object.values(error.errors).map((e) => e.message);
-      message = errors.join(', ');
-      error = new ApiError(statusCode, message, errors);
-    }
-    // Mongoose cast error (invalid ObjectId)
-    else if (error.name === 'CastError') {
-      statusCode = 400;
-      message = `Invalid ${error.path}: ${error.value}`;
+    // Prisma Unique constraint violation
+    if (error.code === 'P2002') {
+      statusCode = 409;
+      const field = error.meta?.target?.[0] || 'field';
+      message = `Duplicate value for '${field}'`;
       error = new ApiError(statusCode, message);
     }
-    // MongoDB duplicate key
-    else if (error.code === 11000) {
-      statusCode = 409;
-      const field = Object.keys(error.keyValue || {})[0] || 'field';
-      message = `Duplicate value for '${field}'`;
+    // Prisma Record not found
+    else if (error.code === 'P2025') {
+      statusCode = 404;
+      message = error.meta?.cause || 'Record not found';
+      error = new ApiError(statusCode, message);
+    }
+    // Prisma Foreign key constraint violation
+    else if (error.code === 'P2003') {
+      statusCode = 400;
+      message = `Foreign key constraint failed on the field: ${error.meta?.field_name}`;
       error = new ApiError(statusCode, message);
     }
     // JWT errors

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
-const User = require('../models/User.model');
+const prisma = require('../config/prisma');
 
 /**
  * Protect routes — verifies JWT access token
@@ -29,7 +29,10 @@ const protect = asyncHandler(async (req, res, next) => {
     throw new ApiError(401, 'Invalid token');
   }
 
-  const user = await User.findById(decoded.id).select('-password');
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.id },
+  });
+
   if (!user) {
     throw new ApiError(401, 'User belonging to this token no longer exists');
   }
@@ -38,7 +41,11 @@ const protect = asyncHandler(async (req, res, next) => {
     throw new ApiError(403, 'Your account has been blocked. Contact support.');
   }
 
-  req.user = user;
+  // Remove password from user object
+  const userResponse = { ...user };
+  delete userResponse.password;
+
+  req.user = userResponse;
   next();
 });
 

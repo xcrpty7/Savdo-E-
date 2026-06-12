@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, TrendingUp, DollarSign, AlertTriangle, PlusCircle, LogOut } from 'lucide-react';
+import { ShoppingCart, TrendingUp, DollarSign, AlertTriangle, PlusCircle, LogOut, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import * as reportsApi from '../api/reports.api';
 import * as salesApi from '../api/sales.api';
@@ -47,14 +47,14 @@ export default function Dashboard() {
     );
   }
 
-  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+  const { data: summaryData, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useQuery({
     queryKey: ['reports-summary'],
     queryFn: reportsApi.getSummary,
     refetchInterval: 30000,
   });
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const { data: salesData, isLoading: salesLoading } = useQuery({
+  const { data: salesData, isLoading: salesLoading, isError: salesError, refetch: refetchSales } = useQuery({
     queryKey: ['sales-today', todayStr],
     queryFn: () => salesApi.getSales({ date: todayStr }),
     refetchInterval: 30000,
@@ -108,26 +108,17 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {summaryLoading ? (
             [1, 2, 3].map((i) => <SkeletonCard key={i} />)
+          ) : summaryError ? (
+            <div className="col-span-3 bg-white rounded-2xl border border-red-100 p-5 flex flex-col items-center gap-2 text-center">
+              <AlertCircle size={28} className="text-red-400" />
+              <p className="text-sm font-semibold text-red-500">{t('error_loading')}</p>
+              <button onClick={() => refetchSummary()} className="text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
+            </div>
           ) : (
             <>
-              <StatCard
-                label={t('today_sales')}
-                value={todayStats.salesCount ?? 0}
-                icon={ShoppingCart}
-                color="blue"
-              />
-              <StatCard
-                label={t('today_revenue')}
-                value={fmt(todayStats.totalRevenue)}
-                icon={DollarSign}
-                color="amber"
-              />
-              <StatCard
-                label={t('today_profit')}
-                value={fmt(todayStats.totalProfit)}
-                icon={TrendingUp}
-                color="green"
-              />
+              <StatCard label={t('today_sales')} value={todayStats.salesCount ?? 0} icon={ShoppingCart} color="blue" />
+              <StatCard label={t('today_revenue')} value={fmt(todayStats.totalRevenue)} icon={DollarSign} color="amber" />
+              <StatCard label={t('today_profit')} value={fmt(todayStats.totalProfit)} icon={TrendingUp} color="green" />
             </>
           )}
         </div>
@@ -185,6 +176,12 @@ export default function Dashboard() {
                   <div className="h-5 w-20 bg-slate-200 rounded" />
                 </div>
               ))}
+            </div>
+          ) : salesError ? (
+            <div className="px-5 py-10 text-center">
+              <AlertCircle size={32} className="mx-auto mb-2 text-red-400" />
+              <p className="text-sm font-semibold text-red-500">{t('error_loading')}</p>
+              <button onClick={() => refetchSales()} className="mt-2 text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
             </div>
           ) : recentSales.length === 0 ? (
             <div className="px-5 py-10 text-center text-[#64748B]">

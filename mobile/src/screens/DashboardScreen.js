@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,40 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  SafeAreaView
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../store/ThemeContext';
 import { format } from 'date-fns';
-import { COLORS, SIZES } from '../constants/theme';
+import { SIZES, FONTS } from '../constants/theme';
+import { formatPrice } from '../utils/formatPrice';
+import { getSettings } from '../store/settingsStore';
 import { getDailyStats, getRecentSales } from '../database/saleQueries';
 import { isOnline, syncPending, pullServerData } from '../services/syncService';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 
 export default function DashboardScreen({ navigation }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
   const [stats, setStats] = useState({ totalRevenue: 0, totalCost: 0, totalProfit: 0, salesCount: 0 });
   const [recentSales, setRecentSales] = useState([]);
   const [online, setOnline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currency, setCurrency] = useState('UZS');
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayDisplay = format(new Date(), 'MMMM dd, yyyy');
+
+  useEffect(() => {
+    const load = async () => {
+      const s = await getSettings();
+      setCurrency(s.currency || 'UZS');
+    };
+    load();
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -65,313 +83,291 @@ export default function DashboardScreen({ navigation }) {
     loadData();
   }, [loadData]);
 
+  const StatItem = ({ title, value, icon, color }) => (
+    <Card style={styles.statCard}>
+      <View style={[styles.statIconWrapper, { backgroundColor: color + '15' }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <View>
+        <Text style={[styles.statTitle, { color: colors.textMuted }]}>{title}</Text>
+        <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      </View>
+    </Card>
+  );
+
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={COLORS.accent} size="large" />
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={COLORS.accent}
-          colors={[COLORS.accent]}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Savdo</Text>
-          <Text style={styles.headerDate}>{todayDisplay}</Text>
-        </View>
-        <TouchableOpacity style={styles.syncButton} onPress={handleSync}>
-          <Ionicons
-            name={online ? 'cloud-done-outline' : 'cloud-offline-outline'}
-            size={22}
-            color={online ? COLORS.accent : COLORS.warning}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
-          <Text style={[styles.syncText, { color: online ? COLORS.accent : COLORS.warning }]}>
-            {online ? 'Online' : 'Offline'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Stats Row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Ionicons name="receipt-outline" size={20} color={COLORS.info} />
-          <Text style={styles.statValue}>{stats.salesCount}</Text>
-          <Text style={styles.statLabel}>Sales Today</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="cash-outline" size={20} color={COLORS.accent} />
-          <Text style={styles.statValue}>${Number(stats.totalRevenue).toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Revenue</Text>
-        </View>
-        <View style={[styles.statCard, styles.statCardAccent]}>
-          <Ionicons name="trending-up-outline" size={20} color={COLORS.accent} />
-          <Text style={[styles.statValue, { color: COLORS.accent }]}>
-            ${Number(stats.totalProfit).toFixed(2)}
-          </Text>
-          <Text style={styles.statLabel}>Profit</Text>
-        </View>
-      </View>
-
-      {/* Quick Actions */}
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={styles.newSaleButton}
-          onPress={() => navigation.navigate('NewSale')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add-circle-outline" size={22} color="#fff" />
-          <Text style={styles.newSaleText}>New Sale</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addProductButton}
-          onPress={() => navigation.navigate('Products')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="cube-outline" size={22} color={COLORS.accent} />
-          <Text style={styles.addProductText}>Products</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Recent Sales */}
-      <Text style={styles.sectionTitle}>Recent Sales</Text>
-      {recentSales.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Ionicons name="receipt-outline" size={40} color={COLORS.border} />
-          <Text style={styles.emptyText}>No sales yet today</Text>
-          <Text style={styles.emptySubText}>Tap "New Sale" to record your first sale</Text>
-        </View>
-      ) : (
-        recentSales.map((sale) => (
-          <View key={sale.id} style={styles.saleCard}>
-            <View style={styles.saleLeft}>
-              <View style={styles.saleIconWrapper}>
-                <Ionicons name="cart-outline" size={18} color={COLORS.accent} />
-              </View>
-              <View>
-                <Text style={styles.saleName} numberOfLines={1}>{sale.productName}</Text>
-                <Text style={styles.saleMeta}>
-                  {Number(sale.quantity).toFixed(0)} x ${Number(sale.sellPrice).toFixed(2)}
-                  {'  '}
-                  <Text style={styles.saleTime}>
-                    {format(new Date(sale.createdAt), 'HH:mm')}
-                  </Text>
-                </Text>
-              </View>
-            </View>
-            <View style={styles.saleRight}>
-              <Text style={styles.saleRevenue}>${Number(sale.totalRevenue).toFixed(2)}</Text>
-              <Text style={styles.saleProfit}>+${Number(sale.profit).toFixed(2)}</Text>
-            </View>
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.headerGreeting, { color: colors.textMuted }]}>Xayrli kun!</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Dashboard</Text>
           </View>
-        ))
-      )}
-    </ScrollView>
+          <TouchableOpacity 
+            style={[styles.syncBadge, { backgroundColor: online ? colors.primary + '10' : colors.warning + '10' }]} 
+            onPress={handleSync}
+          >
+            <View style={[styles.dot, { backgroundColor: online ? colors.primary : colors.warning }]} />
+            <Text style={[styles.syncText, { color: online ? colors.primary : colors.warning }]}>
+              {online ? t('common.online') : t('common.offline')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.statsGrid}>
+          <StatItem 
+            title={t('dashboard.salesToday')} 
+            value={stats.salesCount} 
+            icon="receipt" 
+            color="#6366f1" 
+          />
+          <StatItem 
+            title={t('dashboard.revenue')} 
+            value={formatPrice(stats.totalRevenue, currency)} 
+            icon="wallet" 
+            color="#22c55e" 
+          />
+          <StatItem 
+            title={t('dashboard.profit')} 
+            value={formatPrice(stats.totalProfit, currency)} 
+            icon="trending-up" 
+            color="#3b82f6" 
+          />
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('dashboard.quickActions')}</Text>
+        </View>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('NewSale')}
+          >
+            <Ionicons name="add-circle" size={24} color="#fff" />
+            <Text style={styles.actionButtonText}>{t('dashboard.newSale')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border }]}
+            onPress={() => navigation.navigate('Products')}
+          >
+            <Ionicons name="cube" size={24} color={colors.primary} />
+            <Text style={[styles.actionButtonText, { color: colors.primary }]}>{t('dashboard.products')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('dashboard.recentSales')}</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('SalesStack')}>
+            <Text style={[styles.seeAllText, { color: colors.primary }]}>Barchasi</Text>
+          </TouchableOpacity>
+        </View>
+
+        {recentSales.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Ionicons name="receipt-outline" size={48} color={colors.border} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('dashboard.noSales')}</Text>
+          </Card>
+        ) : (
+          recentSales.map((sale) => (
+            <Card key={sale.id} style={styles.saleCard}>
+              <View style={styles.saleLeft}>
+                <View style={[styles.saleIconBg, { backgroundColor: colors.primary + '10' }]}>
+                  <Ionicons name="bag-handle" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.saleName, { color: colors.text }]} numberOfLines={1}>{sale.productName}</Text>
+                  <Text style={[styles.saleTime, { color: colors.textMuted }]}>
+                    {format(new Date(sale.createdAt), 'HH:mm')} • {Number(sale.quantity).toFixed(0)} dona
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.saleRight}>
+                <Text style={[styles.salePrice, { color: colors.text }]}>{formatPrice(sale.totalRevenue, currency)}</Text>
+                <Text style={[styles.saleProfit, { color: '#22c55e' }]}>+{formatPrice(sale.profit, currency)}</Text>
+              </View>
+            </Card>
+          ))
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   content: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: 20,
+    paddingBottom: 100,
   },
   centered: {
     flex: 1,
-    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 8,
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  headerGreeting: {
+    fontSize: SIZES.sm,
+    ...FONTS.medium,
   },
   headerTitle: {
-    fontSize: SIZES.xxl,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontSize: 28,
+    ...FONTS.bold,
   },
-  headerDate: {
-    fontSize: SIZES.sm,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  syncButton: {
+  syncBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     gap: 6,
   },
-  syncText: {
-    fontSize: SIZES.sm,
-    fontWeight: '600',
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
+  syncText: {
+    fontSize: 12,
+    ...FONTS.semibold,
+  },
+  statsGrid: {
+    gap: 12,
     marginBottom: 24,
   },
   statCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    gap: 6,
+    padding: 16,
+    gap: 16,
   },
-  statCardAccent: {
-    borderColor: COLORS.accent,
+  statIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statTitle: {
+    fontSize: 12,
+    ...FONTS.medium,
+    marginBottom: 2,
   },
   statValue: {
-    fontSize: SIZES.base,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontSize: 18,
+    ...FONTS.bold,
   },
-  statLabel: {
-    fontSize: SIZES.xs,
-    color: COLORS.textMuted,
-    textAlign: 'center',
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
   },
   sectionTitle: {
-    fontSize: SIZES.base,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 12,
+    fontSize: 18,
+    ...FONTS.bold,
+  },
+  seeAllText: {
+    fontSize: 14,
+    ...FONTS.semibold,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: 12,
     marginBottom: 24,
   },
-  newSaleButton: {
-    flex: 2,
-    flexDirection: 'row',
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  newSaleText: {
-    color: '#fff',
-    fontSize: SIZES.base,
-    fontWeight: '700',
-  },
-  addProductButton: {
+  actionButton: {
     flex: 1,
+    height: 60,
+    borderRadius: 16,
     flexDirection: 'row',
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.accent,
     gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  addProductText: {
-    color: COLORS.accent,
-    fontSize: SIZES.base,
-    fontWeight: '600',
-  },
-  emptyCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 32,
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyText: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.base,
-    fontWeight: '600',
-  },
-  emptySubText: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.sm,
-    textAlign: 'center',
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    ...FONTS.bold,
   },
   saleCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    padding: 14,
+    marginBottom: 10,
   },
   saleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 10,
+    gap: 12,
   },
-  saleIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: COLORS.background,
+  saleIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saleName: {
-    color: COLORS.text,
-    fontSize: SIZES.md,
-    fontWeight: '600',
-    maxWidth: 160,
-  },
-  saleMeta: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.xs,
-    marginTop: 2,
+    fontSize: 15,
+    ...FONTS.semibold,
   },
   saleTime: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.xs,
+    fontSize: 12,
+    marginTop: 2,
   },
   saleRight: {
     alignItems: 'flex-end',
   },
-  saleRevenue: {
-    color: COLORS.text,
-    fontSize: SIZES.md,
-    fontWeight: '600',
+  salePrice: {
+    fontSize: 15,
+    ...FONTS.bold,
   },
   saleProfit: {
-    color: COLORS.accent,
-    fontSize: SIZES.sm,
-    fontWeight: '600',
+    fontSize: 12,
+    ...FONTS.semibold,
+    marginTop: 2,
   },
+  emptyCard: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    ...FONTS.medium,
+  }
 });

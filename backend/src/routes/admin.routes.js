@@ -32,9 +32,15 @@ router.post(
 // Dashboard
 router.get('/stats', adminController.getDashboardStats);
 
+// Admin management
+router.get('/admins', adminController.getAllAdmins);
+router.patch('/admins/:id/status', adminController.toggleAdminStatus);
+
 // User management
 router.get('/users', adminController.getAllUsers);
 router.get('/users/:id', adminController.getUserById);
+router.post('/users', adminController.createUserByAdmin);
+router.patch('/users/:id', adminController.updateUserByAdmin);
 router.patch('/users/:id/block', adminController.blockUser);
 router.patch('/users/:id/unblock', adminController.unblockUser);
 router.delete(

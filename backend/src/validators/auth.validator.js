@@ -2,7 +2,8 @@ const Joi = require('joi');
 
 const registerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),
-  email: Joi.string().email().lowercase().required(),
+  email: Joi.string().email().lowercase(),
+  phone: Joi.string().trim(),
   password: Joi.string()
     .min(8)
     .max(128)
@@ -12,12 +13,13 @@ const registerSchema = Joi.object({
       'string.pattern.base':
         'Password must contain at least one uppercase letter, one lowercase letter, and one number',
     }),
-});
+}).or('email', 'phone');
 
 const loginSchema = Joi.object({
-  email: Joi.string().email().lowercase().required(),
+  email: Joi.string().email().lowercase(),
+  phone: Joi.string().trim(),
   password: Joi.string().required(),
-});
+}).or('email', 'phone');
 
 const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string().required(),
@@ -25,8 +27,11 @@ const refreshTokenSchema = Joi.object({
 
 const updateProfileSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100),
+  email: Joi.string().email().lowercase(),
   phone: Joi.string().trim().max(20).allow(''),
   avatar: Joi.string().uri().allow(''),
+  telegram: Joi.string().trim().max(50).allow(''),
+  instagram: Joi.string().trim().max(50).allow(''),
 });
 
 const addressSchema = Joi.object({

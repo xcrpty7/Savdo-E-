@@ -1,11 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,11 +10,18 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SIZES, FONTS } from '../constants/theme';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../store/ThemeContext';
+import { SIZES, FONTS } from '../constants/theme';
 import apiClient from '../services/api';
 import { setToken, setUser } from '../store/authStore';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Card from '../components/ui/Card';
 
 export default function LoginScreen({ navigation }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,19 +29,23 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!phone.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter phone number and password.');
+      Alert.alert(t('common.error'), t('auth.fillFields'));
       return;
     }
 
     setLoading(true);
     try {
-      const response = await apiClient.post('/auth/login', {
-        phone: phone.trim(),
-        password: password.trim(),
-      });
+      const payload = { password: password.trim() };
+      const loginId = phone.trim();
+      if (loginId.includes('@')) {
+        payload.email = loginId;
+      } else {
+        payload.phone = loginId;
+      }
+      const response = await apiClient.post('/auth/login', payload);
 
-      const { token, refreshToken, user } = response.data;
-      await setToken(token, refreshToken);
+      const { user, accessToken, refreshToken } = response.data.data;
+      await setToken(accessToken, refreshToken);
       await setUser(user);
 
       navigation.reset({
@@ -46,127 +54,104 @@ export default function LoginScreen({ navigation }) {
       });
     } catch (error) {
       const message =
-        error.response?.data?.message ||
-        'Login failed. Please check your credentials.';
-      Alert.alert('Login Failed', message);
+        error.response?.data?.message || t('auth.loginFailed');
+      Alert.alert(t('common.error'), message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Demo login bypass for offline testing
-  const handleDemoLogin = async () => {
-    setLoading(true);
-    try {
-      await setToken('demo_token', 'demo_refresh');
-      await setUser({ id: 'demo', name: 'Demo User', phone: '998901234567', role: 'cashier' });
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'MainTabs' }],
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Demo login failed.');
-    } finally {
-      setLoading(false);
+  const handlePhoneChange = (text) => {
+    if (/[a-zA-Z@]/.test(text)) {
+      setPhone(text);
+      return;
     }
+
+    if (!text.startsWith('+998')) {
+      if (text.startsWith('+')) {
+        setPhone(text);
+      } else if (text.length > 0) {
+        let digits = text.replace(/[^\d]/g, '');
+        if (digits) {
+          setPhone('+998 ' + digits);
+        } else {
+          setPhone(text);
+        }
+      } else {
+        setPhone('');
+      }
+      return;
+    }
+
+    let cleaned = text.replace(/[^\d]/g, '');
+    let formatted = '+';
+    if (cleaned.length > 0) formatted += cleaned.substring(0, 3);
+    if (cleaned.length > 3) formatted += ' ' + cleaned.substring(3, 5);
+    if (cleaned.length > 5) formatted += ' ' + cleaned.substring(5, 8);
+    if (cleaned.length > 8) formatted += ' ' + cleaned.substring(8, 10);
+    if (cleaned.length > 10) formatted += ' ' + cleaned.substring(10, 12);
+    setPhone(formatted);
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <StatusBar style="light" backgroundColor={COLORS.background} />
+      <StatusBar style={colors.background === '#0F172A' ? 'light' : 'dark'} backgroundColor={colors.background} />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo / Branding */}
-        <View style={styles.logoSection}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoLetter}>S</Text>
+        <View style={styles.headerSection}>
+          <View style={[styles.logoCircle, { backgroundColor: colors.primary }]}>
+            <Ionicons name="cart" size={40} color="#fff" />
           </View>
-          <Text style={styles.appName}>SAVDO</Text>
-          <Text style={styles.appSubtitle}>Smart Trading</Text>
+          <Text style={[styles.appName, { color: colors.primary }]}>SAVDO-E</Text>
+          <Text style={[styles.appSubtitle, { color: colors.textMuted }]}>{t('app.subtitle') || 'Boshqaruv tizimi'}</Text>
         </View>
 
-        {/* Form Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Welcome Back</Text>
-          <Text style={styles.cardSubtitle}>Sign in to your account</Text>
+        <Card style={styles.card}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{t('auth.welcome')}</Text>
+          <Text style={[styles.cardSubtitle, { color: colors.textMuted }]}>{t('auth.signInSubtitle')}</Text>
 
-          {/* Phone Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Phone Number</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="call-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="+998 90 123 45 67"
-                placeholderTextColor={COLORS.textMuted}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-            </View>
-          </View>
+          <Input
+            label={t('auth.phone')}
+            placeholder="+998 90 123 45 67"
+            value={phone}
+            onChangeText={handlePhoneChange}
+            keyboardType="phone-pad"
+            icon={<Ionicons name="call-outline" size={20} color={colors.textMuted} />}
+          />
 
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter password"
-                placeholderTextColor={COLORS.textMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(v => !v)}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={18}
-                  color={COLORS.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Input
+            label={t('auth.password')}
+            placeholder={t('auth.passwordPlaceholder')}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            icon={<Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />}
+            containerStyle={{ marginBottom: 24 }}
+          />
 
-          {/* Login Button */}
-          <TouchableOpacity
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+          <Button
+            title={t('auth.signIn')}
             onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
-            )}
-          </TouchableOpacity>
+            loading={loading}
+            variant="primary"
+            style={{ height: 52 }}
+          />
 
-          {/* Demo Button */}
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={handleDemoLogin}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.demoButtonText}>Continue in Demo Mode (Offline)</Text>
-          </TouchableOpacity>
-        </View>
+          <Button
+            title={t('auth.signUp')}
+            onPress={() => navigation.navigate('Register')}
+            variant="outline"
+            style={{ marginTop: 12, borderHeight: 0, borderColor: 'transparent' }}
+            textStyle={{ color: colors.primary }}
+          />
+        </Card>
 
-        <Text style={styles.footer}>Savdo POS v1.0.0</Text>
+        <Text style={[styles.footer, { color: colors.textMuted }]}>{t('app.version')}</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -175,124 +160,55 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   container: {
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 40,
   },
-  logoSection: {
+  headerSection: {
     alignItems: 'center',
     marginBottom: 40,
   },
   logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.accent,
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-  },
-  logoLetter: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#fff',
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
   },
   appName: {
-    fontSize: SIZES.xxxl,
-    fontWeight: '700',
-    color: COLORS.accent,
-    letterSpacing: 4,
+    fontSize: 28,
+    ...FONTS.bold,
+    letterSpacing: 1,
   },
   appSubtitle: {
-    fontSize: SIZES.base,
-    color: COLORS.textMuted,
+    fontSize: SIZES.md,
     marginTop: 4,
-    letterSpacing: 1,
   },
   card: {
     width: '100%',
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     padding: 24,
   },
   cardTitle: {
-    fontSize: SIZES.xxl,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4,
+    fontSize: 24,
+    ...FONTS.bold,
+    marginBottom: 8,
   },
   cardSubtitle: {
-    fontSize: SIZES.md,
-    color: COLORS.textMuted,
+    fontSize: SIZES.base,
     marginBottom: 24,
   },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: SIZES.sm,
-    color: COLORS.textMuted,
-    marginBottom: 6,
-    fontWeight: '500',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    height: 48,
-    color: COLORS.text,
-    fontSize: SIZES.base,
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  loginButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 10,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: SIZES.base,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  demoButton: {
-    marginTop: 12,
-    alignItems: 'center',
-    padding: 12,
-  },
-  demoButtonText: {
-    color: COLORS.textMuted,
-    fontSize: SIZES.sm,
-    textDecorationLine: 'underline',
-  },
   footer: {
-    marginTop: 32,
-    color: COLORS.textMuted,
+    marginTop: 40,
     fontSize: SIZES.xs,
   },
 });

@@ -11,7 +11,7 @@ const statusStyle = {
   blocked: "bg-red-100 text-red-700"
 };
 
-const empty = { name: "", email: "", phone: "", role: "viewer", status: "active" };
+const empty = { name: "", email: "", phone: "", role: "USER", status: "active", password: "" };
 
 export function UsersPage() {
   const { profile } = useAuth();
@@ -40,13 +40,24 @@ export function UsersPage() {
   );
 
   function openCreate() { setEditId(null); setForm(empty); setModalOpen(true); }
-  function openEdit(u) { setEditId(u.id); setForm({ name: u.name, email: u.email, phone: u.phone, role: u.role, status: u.status }); setModalOpen(true); }
+  function openEdit(u) { setEditId(u.id); setForm({ name: u.name, email: u.email, phone: u.phone, role: u.role, status: u.status, password: "" }); setModalOpen(true); }
   function closeModal() { setModalOpen(false); setEditId(null); setForm(empty); }
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (editId) updateUser(editId, form);
-    else createUser(form);
+    const payload = { ...form };
+    // role ni to'g'ri formatga o'tkazish
+    if (!editId) {
+      payload.role = "USER";
+    }
+    // Bo'sh qiymatlarni tozalash
+    if (!payload.email) delete payload.email;
+    if (!payload.phone) delete payload.phone;
+    if (editId) {
+      updateUser(editId, payload);
+    } else {
+      createUser(payload);
+    }
     closeModal();
   }
 
@@ -123,7 +134,7 @@ export function UsersPage() {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <tr key={u.id} className="border-b border-gray-50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-xs flex items-center justify-center shrink-0">
@@ -222,22 +233,24 @@ export function UsersPage() {
       >
         <form id="user-form" onSubmit={handleSubmit} className="space-y-3">
           {[
-            { label: t("users.fullName"), name: "name", type: "text" },
-            { label: t("common.email"), name: "email", type: "email" },
-            { label: t("common.phone"), name: "phone", type: "text" }
+            { label: t("users.fullName"), name: "name", type: "text", required: true },
+            { label: t("common.email") + " (ixtiyoriy)", name: "email", type: "email", required: false },
+            { label: t("common.phone") + " (ixtiyoriy)", name: "phone", type: "text", required: false },
+            { label: editId ? t("common.password") + " (bo'sh qoldirsangiz o'zgarmaydi)" : t("common.password") + " *", name: "password", type: "password", required: !editId }
           ].map((f) => (
             <div key={f.name}>
               <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
               <input
                 type={f.type}
                 name={f.name}
-                value={form[f.name]}
+                value={form[f.name] || ""}
                 onChange={(e) => setForm((c) => ({ ...c, [e.target.name]: e.target.value }))}
-                required
+                required={f.required}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
           ))}
+          <p className="text-xs text-gray-400">* Email yoki telefon raqamdan kamida bittasi to'ldirilishi shart</p>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("common.role")}</label>
             <select name="role" value={form.role} onChange={(e) => setForm((c) => ({ ...c, role: e.target.value }))}

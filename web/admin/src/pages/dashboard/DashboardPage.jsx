@@ -40,43 +40,58 @@ export function DashboardPage() {
 
   const [weeklyData, setWeeklyData] = useState(weeklyUserStats);
   const [monthlyData, setMonthlyData] = useState(monthlyOrderStats);
+  const [dashboardStats, setDashboardStats] = useState({
+    totalUsers: users.length,
+    totalProducts: 0,
+    totalOrders: 0,
+    totalRevenue: 0
+  });
 
   useEffect(() => {
-    http.get("/admin/stats")
-      .then((res) => {
-        if (res?.weeklyUsers?.length) setWeeklyData(res.weeklyUsers);
-        if (res?.monthlyOrders?.length) setMonthlyData(res.monthlyOrders);
-      })
-      .catch(() => {/* fallback to mock data */});
-  }, []);
+    function fetchStats() {
+      http.get("/admin/stats")
+        .then((res) => {
+          const data = res?.data?.data || res?.data;
+          if (data?.weeklyUsers?.length) setWeeklyData(data.weeklyUsers);
+          if (data?.monthlyOrders?.length) setMonthlyData(data.monthlyOrders);
+          setDashboardStats({
+            totalUsers: data?.totalUsers || users.length,
+            totalProducts: data?.totalProducts || 0,
+            totalOrders: data?.totalOrders || 0,
+            totalRevenue: data?.totalRevenue || 0
+          });
+        })
+        .catch(() => {/* fallback to mock data */});
+    }
+    
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
+  }, [users.length]);
 
   const stats = [
     {
       label: t("dashboard.stats.totalUsers"),
-      value: users.length,
-      delta: t("dashboard.stats.activeCount", {
-        count: users.filter((user) => user.status === "active").length
-      }),
+      value: dashboardStats.totalUsers,
+      delta: "",
       tone: "info"
     },
     {
-      label: t("dashboard.stats.admins"),
-      value: admins.length,
-      delta: t("dashboard.stats.activeCount", {
-        count: admins.filter((admin) => admin.status === "active").length
-      }),
+      label: t("dashboard.stats.totalProducts"),
+      value: dashboardStats.totalProducts,
+      delta: "",
       tone: "success"
     },
     {
-      label: t("dashboard.stats.auditLogs"),
-      value: auditLogs.length,
-      delta: t("dashboard.stats.liveTrail"),
+      label: t("dashboard.stats.totalOrders"),
+      value: dashboardStats.totalOrders,
+      delta: "",
       tone: "warning"
     },
     {
-      label: t("dashboard.stats.notifications"),
-      value: notificationFeed.length,
-      delta: t("dashboard.stats.actionableItems"),
+      label: t("dashboard.stats.totalRevenue"),
+      value: dashboardStats.totalRevenue.toLocaleString() + " so'm",
+      delta: "",
       tone: "danger"
     }
   ];

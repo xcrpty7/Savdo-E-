@@ -5,6 +5,10 @@ export const usersApi = {
   getAll: (params = {}) =>
     http.get("/admin/users", { params }),
 
+  /** POST /api/admin/users */
+  create: (data) =>
+    http.post("/admin/users", data),
+
   /** GET /api/admin/users/:id */
   getById: (id) =>
     http.get(`/admin/users/${id}`),
@@ -16,6 +20,10 @@ export const usersApi = {
   /** PATCH /api/admin/users/:id/unblock */
   unblock: (id) =>
     http.patch(`/admin/users/${id}/unblock`),
+
+  /** PATCH /api/admin/users/:id */
+  update: (id, data) =>
+    http.patch(`/admin/users/${id}`, data),
 
   /** DELETE /api/admin/users/:id */
   remove: (id) =>

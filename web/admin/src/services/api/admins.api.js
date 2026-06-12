@@ -6,11 +6,15 @@ import { http } from "../http";
  */
 
 export const adminsApi = {
-  /** GET /api/admins */
+  /** GET /api/v1/admin/admins */
   getAll: () =>
-    http.get("/admins"),
+    http.get("/admin/admins"),
 
-  /** PATCH /api/admins/:id/status */
+  /** POST /api/v1/admin/register-admin */
+  create: (data) =>
+    http.post("/admin/register-admin", data),
+
+  /** PATCH /api/v1/admin/admins/:id/status */
   toggleStatus: (id) =>
-    http.patch(`/admins/${id}/status`)
+    http.patch(`/admin/admins/${id}/status`)
 };

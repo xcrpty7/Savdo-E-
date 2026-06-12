@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, X, Pencil, Trash2, Package } from 'lucide-react';
+import { Search, Plus, X, Pencil, Trash2, Package, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import * as productsApi from '../api/products.api';
@@ -30,7 +30,7 @@ export default function Products() {
   const [modal, setModal] = useState(null); // null | 'add' | { product }
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.getProducts(),
   });
@@ -76,7 +76,13 @@ export default function Products() {
         </div>
 
         {/* Product list */}
-        {isLoading ? (
+        {isError ? (
+          <div className="text-center py-16">
+            <AlertCircle size={40} className="mx-auto mb-3 text-red-400" />
+            <p className="font-semibold text-red-500">{t('error_loading')}</p>
+            <button onClick={() => refetch()} className="mt-3 text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
+          </div>
+        ) : isLoading ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="bg-white rounded-2xl border border-[#E2E8F0] p-4 animate-pulse flex justify-between">

@@ -62,14 +62,20 @@ export function AuthProvider({ children }) {
     }
   }, [auth]);
 
+  useEffect(() => {
+    const handle = () => setAuth(null);
+    window.addEventListener("auth:logout", handle);
+    return () => window.removeEventListener("auth:logout", handle);
+  }, []);
+
   const value = useMemo(
     () => ({
       auth,
       profile: auth?.profile ?? null,
       isAuthenticated: Boolean(auth?.token),
 
-      login: async ({ email, password }) => {
-        const res = await authApi.login(email, password);
+      login: async (credentials) => {
+        const res = await authApi.login(credentials);
         const { user, accessToken, refreshToken } = res.data;
         const profile = buildProfile(user);
         const nextAuth = { token: accessToken, refreshToken, profile };

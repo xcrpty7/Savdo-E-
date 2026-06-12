@@ -1,12 +1,10 @@
-const Product = require('../models/Product.model');
-const Sale = require('../models/Sale.model');
-const SyncQueue = require('../models/SyncQueue.model');
+const prisma = require('../config/prisma');
 const saleService = require('./sale.service');
 const ApiError = require('../utils/ApiError');
+const slugify = require('slugify');
 
 /**
  * Process a batch of offline operations from mobile client.
- * Conflict resolution: latest update wins (based on updatedAt timestamp).
  */
 const processSyncBatch = async (userId, operations) => {
   const results = [];
@@ -23,75 +21,135 @@ const processSyncBatch = async (userId, operations) => {
           syncId: entityId,
           isFromOffline: true,
         });
-        serverEntityId = sale._id;
+        serverEntityId = sale.id;
       }
 
       else if (entity === 'product') {
         if (operation === 'create') {
-          const existing = await Product.findOne({ 'name': payload.name, 'createdBy': userId });
+          const existing = await prisma.product.findFirst({
+            where: { name: payload.name, createdById: userId }
+          });
           if (!existing) {
-            const product = await Product.create({
-              ...payload,
-              createdBy: userId,
-              isActive: true,
+            const slug = slugify(payload.name, { lower: true, strict: true }) + '-' + Date.now();
+            const finalPrice = payload.price - (payload.price * (payload.discount || 0)) / 100;
+
+            const product = await prisma.product.create({
+              data: {
+                ...payload,
+                slug,
+                finalPrice,
+                createdById: userId,
+                ownerId: userId,
+                isActive: true,
+              },
             });
-            serverEntityId = product._id;
+            serverEntityId = product.id;
           } else {
-            serverEntityId = existing._id;
+            serverEntityId = existing.id;
           }
         }
 
         else if (operation === 'update') {
-          const product = await Product.findOne({ _id: payload.serverId || entityId });
+          const pId = payload.serverId || entityId;
+          const product = await prisma.product.findUnique({ where: { id: pId } });
           if (product) {
-            // Latest update wins
             const clientTime = clientUpdatedAt ? new Date(clientUpdatedAt) : new Date(0);
             const serverTime = product.updatedAt;
             if (clientTime >= serverTime) {
-              Object.assign(product, payload);
-              await product.save();
+              const updateData = { ...payload };
+              if (payload.name && payload.name !== product.name) {
+                updateData.slug = slugify(payload.name, { lower: true, strict: true }) + '-' + Date.now();
+              }
+              if (payload.price !== undefined || payload.discount !== undefined) {
+                const p = payload.price !== undefined ? payload.price : product.price;
+                const d = payload.discount !== undefined ? payload.discount : product.discount;
+                updateData.finalPrice = p - (p * d) / 100;
+              }
+
+              const updated = await prisma.product.update({
+                where: { id: pId },
+                data: updateData,
+              });
+              serverEntityId = updated.id;
+            } else {
+              serverEntityId = product.id;
             }
-            serverEntityId = product._id;
           }
         }
 
         else if (operation === 'delete') {
-          await Product.findByIdAndUpdate(payload.serverId || entityId, { isActive: false });
+          const pId = payload.serverId || entityId;
+          await prisma.product.update({
+            where: { id: pId },
+            data: { isActive: false },
+          });
         }
       }
 
       // Record sync result
-      await SyncQueue.findOneAndUpdate(
-        { user: userId, entityId },
-        {
-          user: userId,
-          operation,
-          entity,
-          entityId,
-          payload,
-          serverEntityId,
-          status: 'synced',
-          $inc: { attempts: 1 },
-        },
-        { upsert: true, new: true }
-      );
+      const existingSync = await prisma.syncQueue.findFirst({
+        where: { userId, entity, entityId },
+      });
+
+      if (existingSync) {
+        await prisma.syncQueue.update({
+          where: { id: existingSync.id },
+          data: {
+            operation,
+            entity,
+            payload,
+            serverEntityId,
+            status: 'synced',
+            attempts: { increment: 1 },
+          },
+        });
+      } else {
+        await prisma.syncQueue.create({
+          data: {
+            userId,
+            operation,
+            entity,
+            entityId,
+            payload,
+            serverEntityId,
+            status: 'synced',
+            attempts: 1,
+          },
+        });
+      }
 
       results.push({ entityId, status: 'synced', serverEntityId });
     } catch (err) {
-      await SyncQueue.findOneAndUpdate(
-        { user: userId, entityId },
-        {
-          user: userId,
-          operation,
-          entity,
-          entityId,
-          payload,
-          status: 'failed',
-          errorMessage: err.message,
-          $inc: { attempts: 1 },
-        },
-        { upsert: true, new: true }
-      );
+      const existingSync = await prisma.syncQueue.findFirst({
+        where: { userId, entity, entityId },
+      });
+
+      if (existingSync) {
+        await prisma.syncQueue.update({
+          where: { id: existingSync.id },
+          data: {
+            operation,
+            entity,
+            payload,
+            status: 'failed',
+            errorMessage: err.message,
+            attempts: { increment: 1 },
+          },
+        });
+      } else {
+        await prisma.syncQueue.create({
+          data: {
+            userId,
+            operation,
+            entity,
+            entityId,
+            payload,
+            status: 'failed',
+            errorMessage: err.message,
+            attempts: 1,
+          },
+        });
+      }
       results.push({ entityId, status: 'failed', error: err.message });
     }
   }
@@ -100,20 +158,24 @@ const processSyncBatch = async (userId, operations) => {
 };
 
 /**
- * Pull latest data for a user's device (products + recent sales)
+ * Pull latest data for a user's device
  */
 const pullData = async (userId, lastSyncAt) => {
   const since = lastSyncAt ? new Date(lastSyncAt) : new Date(0);
 
   const [products, sales] = await Promise.all([
-    Product.find({
-      createdBy: userId,
-      updatedAt: { $gt: since },
-    }).select('-reviews -__v').lean(),
-    Sale.find({
-      user: userId,
-      createdAt: { $gt: since },
-    }).select('-__v').lean(),
+    prisma.product.findMany({
+      where: {
+        updatedAt: { gt: since },
+      },
+      omit: { reviews: true },
+    }),
+    prisma.sale.findMany({
+      where: {
+        userId,
+        createdAt: { gt: since },
+      },
+    }),
   ]);
 
   return {

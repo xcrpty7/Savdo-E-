@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart2, TrendingUp, DollarSign, ShoppingCart } from 'lucide-react';
+import { BarChart2, TrendingUp, DollarSign, ShoppingCart, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import * as reportsApi from '../api/reports.api';
 import * as salesApi from '../api/sales.api';
@@ -47,12 +47,12 @@ export default function Reports() {
   function DailyReport() {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-    const { data: reportData, isLoading: reportLoading } = useQuery({
+    const { data: reportData, isLoading: reportLoading, isError: reportError, refetch: refetchReport } = useQuery({
       queryKey: ['report-daily', date],
       queryFn: () => reportsApi.getDailyReport(date),
     });
 
-    const { data: salesData, isLoading: salesLoading } = useQuery({
+    const { data: salesData, isLoading: salesLoading, isError: salesError, refetch: refetchSales } = useQuery({
       queryKey: ['sales-today', date],
       queryFn: () => salesApi.getSales({ date }),
     });
@@ -74,26 +74,17 @@ export default function Reports() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {reportLoading ? (
             [1, 2, 3].map((i) => <SkeletonCard key={i} />)
+          ) : reportError ? (
+            <div className="col-span-3 bg-white rounded-2xl border border-red-100 p-5 flex flex-col items-center gap-2 text-center">
+              <AlertCircle size={28} className="text-red-400" />
+              <p className="text-sm font-semibold text-red-500">{t('error_loading')}</p>
+              <button onClick={() => refetchReport()} className="text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
+            </div>
           ) : (
             <>
-              <StatCard
-                label={t('sales_count')}
-                value={stats.salesCount ?? 0}
-                icon={ShoppingCart}
-                color="blue"
-              />
-              <StatCard
-                label={t('total_revenue')}
-                value={fmt(stats.totalRevenue)}
-                icon={DollarSign}
-                color="amber"
-              />
-              <StatCard
-                label={t('total_profit')}
-                value={fmt(stats.totalProfit)}
-                icon={TrendingUp}
-                color="green"
-              />
+              <StatCard label={t('sales_count')} value={stats.salesCount ?? 0} icon={ShoppingCart} color="blue" />
+              <StatCard label={t('total_revenue')} value={fmt(stats.totalRevenue)} icon={DollarSign} color="amber" />
+              <StatCard label={t('total_profit')} value={fmt(stats.totalProfit)} icon={TrendingUp} color="green" />
             </>
           )}
         </div>
@@ -102,7 +93,13 @@ export default function Reports() {
           <div className="px-5 py-4 border-b border-[#E2E8F0]">
             <h3 className="font-bold text-[#0F172A]">{t('sales_list')}</h3>
           </div>
-          {salesLoading ? (
+          {salesError ? (
+            <div className="px-5 py-10 text-center">
+              <AlertCircle size={32} className="mx-auto mb-2 text-red-400" />
+              <p className="text-sm font-semibold text-red-500">{t('error_loading')}</p>
+              <button onClick={() => refetchSales()} className="mt-2 text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
+            </div>
+          ) : salesLoading ? (
             <div className="divide-y divide-[#E2E8F0]">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="flex items-center justify-between px-5 py-4 animate-pulse">
@@ -153,7 +150,7 @@ export default function Reports() {
     const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const [month, setMonth] = useState(defaultMonth);
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
       queryKey: ['report-monthly', month],
       queryFn: () => reportsApi.getMonthlyReport(month),
     });
@@ -175,6 +172,12 @@ export default function Reports() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {isLoading ? (
             [1, 2, 3].map((i) => <SkeletonCard key={i} />)
+          ) : isError ? (
+            <div className="col-span-3 bg-white rounded-2xl border border-red-100 p-5 flex flex-col items-center gap-2 text-center">
+              <AlertCircle size={28} className="text-red-400" />
+              <p className="text-sm font-semibold text-red-500">{t('error_loading')}</p>
+              <button onClick={() => refetch()} className="text-sm text-green-600 font-semibold hover:underline">{t('retry')}</button>
+            </div>
           ) : (
             <>
               <StatCard

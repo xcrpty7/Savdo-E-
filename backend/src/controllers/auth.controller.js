@@ -55,7 +55,7 @@ const logout = asyncHandler(async (req, res) => {
 });
 
 const logoutAll = asyncHandler(async (req, res) => {
-  await authService.logoutAll(req.user._id);
+  await authService.logoutAll(req.user.id);
   res.clearCookie('refreshToken');
   res.status(200).json(new ApiResponse(200, null, 'Logged out from all devices'));
 });

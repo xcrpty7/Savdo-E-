@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal } from "../../components/shared/Modal";
 import { useAdminData } from "../../store/adminData";
+import { useAuth } from "../../store";
 import { useI18n } from "../../i18n";
 
 const statusStyle = {
@@ -9,33 +10,51 @@ const statusStyle = {
   invited:   "bg-yellow-100 text-yellow-700"
 };
 
+const emptyForm = { name: "", email: "", password: "" };
+
 export function AdminsPage() {
-  const { admins, toggleAdminStatus } = useAdminData();
+  const { admins, toggleAdminStatus, createAdmin } = useAdminData();
   const { t } = useI18n();
+  const { profile } = useAuth();
+  const isPrimary = profile?.isPrimary;
+  
   const [confirmTarget, setConfirmTarget] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
 
   // Bosh adminni ro'yxatdan olib, boshqalarni ko'rsatamiz
   const otherAdmins = admins.filter((a) => !a.isPrimary);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    createAdmin(form);
+    setModalOpen(false);
+    setForm(emptyForm);
+  }
 
   return (
     <div className="space-y-5">
       <div className="bg-white rounded-2xl shadow-card overflow-hidden">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">{t("admins.title")}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {t("admins.description")}
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="font-semibold text-gray-900">{t("admins.title")}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {t("admins.description")}
+            </p>
+          </div>
+          {isPrimary && (
+            <button
+              type="button"
+              onClick={() => { setForm(emptyForm); setModalOpen(true); }}
+              className="px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-xl transition-colors shrink-0"
+            >
+              + Yangi Admin Qo'shish
+            </button>
+          )}
         </div>
 
-        {/* Info callout */}
-        <div className="mx-5 my-3 flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-          <span className="text-blue-400 text-base mt-0.5">ℹ</span>
-          <div>
-            <p className="text-sm font-medium text-blue-800">{t("admins.singletonTitle")}</p>
-            <p className="text-xs text-blue-600 mt-0.5">{t("admins.singletonDescription")}</p>
-          </div>
-        </div>
+
 
         {/* Table */}
         <div className="table-scroll">
@@ -123,6 +142,57 @@ export function AdminsPage() {
         }
       >
         <p className="text-sm text-gray-500">{t("admins.modalDescription")}</p>
+      </Modal>
+
+      {/* Create Admin Modal */}
+      <Modal
+        open={modalOpen}
+        title="Yangi Admin Yaratish"
+        onClose={() => setModalOpen(false)}
+        footer={
+          <>
+            <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50">{t("common.cancel")}</button>
+            <button type="submit" form="admin-form" className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-xl hover:bg-primary-dark">
+              {t("common.create")}
+            </button>
+          </>
+        }
+      >
+        <form id="admin-form" onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("users.fullName")}</label>
+            <input
+              type="text"
+              name="name"
+              value={form.name}
+              onChange={(e) => setForm((c) => ({ ...c, name: e.target.value }))}
+              required
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("common.email")}</label>
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={(e) => setForm((c) => ({ ...c, email: e.target.value }))}
+              required
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("common.password")}</label>
+            <input
+              type="password"
+              name="password"
+              value={form.password}
+              onChange={(e) => setForm((c) => ({ ...c, password: e.target.value }))}
+              required
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+        </form>
       </Modal>
     </div>
   );

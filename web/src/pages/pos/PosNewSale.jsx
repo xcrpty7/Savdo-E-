@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, X, Minus, Plus } from 'lucide-react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Search, CheckCircle, X, Minus, Plus, WifiOff, Clock } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as productsApi from '../../api/products.api';
 import * as salesApi from '../../api/sales.api';
 import toast from 'react-hot-toast';
+import useOnlineStatus from '../../hooks/useOnlineStatus';
+import { addPendingSale, getCachedProducts } from '../../services/offlineDB';
 
 function fmt(n) {
   return Number(n || 0).toFixed(2);
@@ -16,19 +18,39 @@ export default function PosNewSale() {
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [offlineProducts, setOfflineProducts] = useState([]);
   const searchRef = useRef(null);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { isOnline } = useOnlineStatus();
+  const outletCtx = useOutletContext();
 
   useEffect(() => { searchRef.current?.focus(); }, []);
 
+  // Load cached products for offline use
+  useEffect(() => {
+    if (!isOnline) {
+      getCachedProducts().then(setOfflineProducts).catch(() => setOfflineProducts([]));
+    }
+  }, [isOnline]);
+
+  // Online: fetch from server
   const { data } = useQuery({
     queryKey: ['pos-products', search],
     queryFn: () => productsApi.getProducts({ search, limit: 20, inStock: 'false' }),
-    enabled: search.length > 0 || !selected,
+    enabled: isOnline && (search.length > 0 || !selected),
   });
 
-  const products = data?.data?.data?.products || [];
+  const onlineProducts = data?.data?.data?.products || [];
+
+  // Filter offline products by search
+  const filteredOffline = search.length > 0
+    ? offlineProducts.filter((p) =>
+        p.name?.toLowerCase().includes(search.toLowerCase())
+      )
+    : offlineProducts;
+
+  const products = isOnline ? onlineProducts : filteredOffline;
 
   const selectProduct = (p) => {
     setSelected(p);
@@ -38,39 +60,65 @@ export default function PosNewSale() {
 
   const handleConfirm = async () => {
     if (!selected) return;
-    if (qty <= 0) { toast.error('Quantity must be positive'); return; }
-    if (qty > selected.stock) { toast.error(`Only ${selected.stock} in stock`); return; }
+    if (qty <= 0) { toast.error('Miqdor musbat bo\'lishi kerak'); return; }
+
+    const stock = selected.stock ?? selected.quantity ?? Infinity;
+    if (qty > stock) { toast.error(`Omborda faqat ${stock} ta bor`); return; }
 
     setIsSubmitting(true);
-    try {
-      await salesApi.createSale({
-        product: selected._id,
-        productName: selected.name,
-        quantity: qty,
-        sellPrice: selected.finalPrice || selected.price,
-        buyPrice: selected.price - (selected.price * (1 - (selected.finalPrice || selected.price) / selected.price)),
-        unit: 'pcs',
-        note,
-      });
 
-      qc.invalidateQueries(['pos-summary']);
-      toast.success(`Sale recorded — Profit: $${fmt(revenue - cost)}`, {
-        icon: '✅',
-        style: { background: '#1E293B', color: '#fff', border: '1px solid #22C55E' },
-      });
+    const salePayload = {
+      product: selected._id,
+      productName: selected.name,
+      quantity: qty,
+      sellPrice: selected.finalPrice || selected.sellPrice || selected.price,
+      buyPrice: selected.buyPrice || selected.price * 0.7,
+      note,
+    };
+
+    try {
+      if (isOnline) {
+        // Normal online sale
+        await salesApi.createSale(salePayload);
+        qc.invalidateQueries(['pos-summary']);
+        qc.invalidateQueries(['pos-sales']);
+
+        const revenue = salePayload.sellPrice * qty;
+        const cost = salePayload.buyPrice * qty;
+        toast.success(`Savdo kiritildi — Foyda: $${fmt(revenue - cost)}`, {
+          icon: '✅',
+          style: { background: '#1E293B', color: '#fff', border: '1px solid #22C55E' },
+        });
+      } else {
+        // Offline: queue for later sync
+        await addPendingSale({
+          ...salePayload,
+          localId: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        });
+
+        // Notify layout to refresh pending count
+        outletCtx?.refreshPending?.();
+
+        toast.success('Savdo saqlandi (offline) — internet tiklananda yuboriladi', {
+          icon: '🕐',
+          style: { background: '#1E293B', color: '#fff', border: '1px solid #EAB308' },
+          duration: 4000,
+        });
+      }
+
       navigate('/pos');
     } catch (_) {
+      // error toast handled by axios interceptor
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const price = selected ? (selected.finalPrice || selected.price) : 0;
-  // buyPrice derived from original price (before discount)
-  const buyPrice = selected ? (selected.price - price) > 0 ? (selected.price - price) : selected.price * 0.7 : 0;
-  const revenue = price * qty;
-  const cost = buyPrice * qty;
-  const profit = revenue - cost;
+  const price    = selected ? (selected.finalPrice || selected.sellPrice || selected.price) : 0;
+  const buyPrice = selected ? (selected.buyPrice || selected.price * 0.7) : 0;
+  const revenue  = price * qty;
+  const cost     = buyPrice * qty;
+  const profit   = revenue - cost;
 
   return (
     <div className="min-h-screen bg-pos-bg text-pos-text p-6">
@@ -79,8 +127,28 @@ export default function PosNewSale() {
           <button onClick={() => navigate('/pos')} className="p-2 rounded-lg hover:bg-pos-card text-pos-muted">
             <X className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold">New Sale</h1>
+          <h1 className="text-xl font-bold">Yangi Savdo</h1>
+          {/* Offline mode badge */}
+          {!isOnline && (
+            <span className="ml-auto flex items-center gap-1.5 text-xs font-semibold bg-yellow-500/20 text-yellow-400 px-2.5 py-1 rounded-full">
+              <WifiOff className="h-3.5 w-3.5" />
+              Offline
+            </span>
+          )}
         </div>
+
+        {/* Offline info banner */}
+        {!isOnline && (
+          <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4 text-sm text-yellow-300">
+            <Clock className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              Offline rejimda savdolar qurilmangizda saqlanadi va internet tiklanganida avtomatik yuboriladi.
+              {offlineProducts.length > 0
+                ? ` (${offlineProducts.length} ta mahsulot keshda mavjud)`
+                : ' (mahsulotlar keshi topilmadi — avval internet bilan ulanib mahsulotlarni yuklang)'}
+            </span>
+          </div>
+        )}
 
         {!selected ? (
           /* Product search */
@@ -90,7 +158,7 @@ export default function PosNewSale() {
               <input
                 ref={searchRef}
                 className="w-full bg-pos-card border border-pos-border rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-pos-muted focus:outline-none focus:border-pos-accent text-base"
-                placeholder="Search product by name..."
+                placeholder="Mahsulot nomini kiriting..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -106,19 +174,31 @@ export default function PosNewSale() {
                   >
                     <div>
                       <p className="font-medium">{p.name}</p>
-                      <p className="text-pos-muted text-xs mt-0.5">{p.category} · Stock: {p.stock}</p>
+                      <p className="text-pos-muted text-xs mt-0.5">
+                        {p.category} · Qoldi: {p.stock ?? p.quantity ?? '?'}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-pos-accent font-bold">${fmt(p.finalPrice || p.price)}</p>
-                      {p.stock === 0 && <span className="text-red-400 text-xs">Out of stock</span>}
+                      <p className="text-pos-accent font-bold">
+                        ${fmt(p.finalPrice || p.sellPrice || p.price)}
+                      </p>
+                      {(p.stock ?? p.quantity ?? 1) === 0 && (
+                        <span className="text-red-400 text-xs">Tugagan</span>
+                      )}
                     </div>
                   </button>
                 ))}
               </div>
             ) : search.length > 0 ? (
-              <p className="text-center text-pos-muted py-10">No products found</p>
+              <p className="text-center text-pos-muted py-10">Mahsulot topilmadi</p>
             ) : (
-              <p className="text-center text-pos-muted py-10">Start typing to search products</p>
+              <p className="text-center text-pos-muted py-10">
+                {isOnline
+                  ? 'Qidirish uchun yozing'
+                  : offlineProducts.length === 0
+                  ? 'Keshda mahsulot yo\'q — internet bilan ulanib qayta kiring'
+                  : 'Qidirish uchun yozing'}
+              </p>
             )}
           </div>
         ) : (
@@ -128,7 +208,9 @@ export default function PosNewSale() {
             <div className="bg-pos-card border border-pos-accent rounded-xl p-4 flex items-center justify-between">
               <div>
                 <p className="font-semibold text-lg">{selected.name}</p>
-                <p className="text-pos-muted text-sm">{selected.category} · {selected.stock} available</p>
+                <p className="text-pos-muted text-sm">
+                  {selected.category} · {selected.stock ?? selected.quantity ?? '?'} mavjud
+                </p>
               </div>
               <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-pos-border text-pos-muted">
                 <X className="h-4 w-4" />
@@ -137,7 +219,7 @@ export default function PosNewSale() {
 
             {/* Quantity control */}
             <div className="bg-pos-card border border-pos-border rounded-xl p-4">
-              <label className="text-pos-muted text-sm mb-3 block">Quantity</label>
+              <label className="text-pos-muted text-sm mb-3 block">Miqdor</label>
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setQty(Math.max(0.5, qty - (qty <= 1 ? 0.5 : 1)))}
@@ -152,8 +234,8 @@ export default function PosNewSale() {
                   className="flex-1 text-center text-3xl font-bold bg-transparent border-none outline-none text-white"
                 />
                 <button
-                  onClick={() => setQty(Math.min(selected.stock, qty + 1))}
-                  disabled={qty >= selected.stock}
+                  onClick={() => setQty(Math.min(selected.stock ?? Infinity, qty + 1))}
+                  disabled={qty >= (selected.stock ?? Infinity)}
                   className="h-12 w-12 rounded-xl bg-pos-border flex items-center justify-center hover:bg-pos-accent/20 transition-colors disabled:opacity-40"
                 >
                   <Plus className="h-5 w-5" />
@@ -164,27 +246,29 @@ export default function PosNewSale() {
             {/* Profit breakdown */}
             <div className="bg-pos-card border border-pos-border rounded-xl p-4 space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-pos-muted">Price per unit</span>
+                <span className="text-pos-muted">Birlik narxi</span>
                 <span>${fmt(price)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-pos-muted">Revenue</span>
+                <span className="text-pos-muted">Tushum</span>
                 <span className="text-yellow-400 font-medium">${fmt(revenue)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-pos-muted">Cost</span>
+                <span className="text-pos-muted">Tannarx</span>
                 <span className="text-red-400">${fmt(cost)}</span>
               </div>
               <div className="flex justify-between text-base font-bold border-t border-pos-border pt-3">
-                <span>Profit</span>
-                <span className={profit >= 0 ? 'text-pos-accent' : 'text-red-400'}>${fmt(profit)}</span>
+                <span>Foyda</span>
+                <span className={profit >= 0 ? 'text-pos-accent' : 'text-red-400'}>
+                  ${fmt(profit)}
+                </span>
               </div>
             </div>
 
             {/* Note */}
             <input
               className="w-full bg-pos-card border border-pos-border rounded-xl px-4 py-3 text-sm text-white placeholder-pos-muted focus:outline-none focus:border-pos-accent"
-              placeholder="Note (optional)"
+              placeholder="Izoh (ixtiyoriy)"
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
@@ -192,11 +276,23 @@ export default function PosNewSale() {
             {/* Confirm button */}
             <button
               onClick={handleConfirm}
-              disabled={isSubmitting || qty <= 0 || qty > selected.stock}
-              className="w-full flex items-center justify-center gap-2 bg-pos-accent hover:bg-pos-accentHover disabled:opacity-50 text-white font-bold text-lg py-4 rounded-xl transition-colors"
+              disabled={isSubmitting || qty <= 0}
+              className={`w-full flex items-center justify-center gap-2 ${
+                isOnline
+                  ? 'bg-pos-accent hover:bg-pos-accentHover'
+                  : 'bg-yellow-500 hover:bg-yellow-400'
+              } disabled:opacity-50 text-white font-bold text-lg py-4 rounded-xl transition-colors`}
             >
-              <CheckCircle className="h-5 w-5" />
-              {isSubmitting ? 'Processing...' : 'Confirm Sale'}
+              {isOnline ? (
+                <CheckCircle className="h-5 w-5" />
+              ) : (
+                <Clock className="h-5 w-5" />
+              )}
+              {isSubmitting
+                ? 'Saqlanmoqda...'
+                : isOnline
+                ? 'Savdoni Tasdiqlash'
+                : 'Offline Saqlash'}
             </button>
           </div>
         )}

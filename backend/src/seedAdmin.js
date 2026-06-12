@@ -1,7 +1,6 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
-const User = require('./models/User.model');
-const connectDB = require('./config/db');
+const prisma = require('./config/prisma');
+const bcrypt = require('bcryptjs');
 
 const admins = [
   {
@@ -19,19 +18,28 @@ const admins = [
 ];
 
 async function seed() {
-  await connectDB();
+  console.log('Seeding admins...');
 
   for (const data of admins) {
-    const existing = await User.findOne({ email: data.email });
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
     if (existing) {
       console.log(`Already exists: ${data.email} (${data.role})`);
       continue;
     }
-    await User.create(data);
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(data.password, salt);
+
+    await prisma.user.create({
+      data: {
+        ...data,
+        password: hashedPassword,
+      },
+    });
     console.log(`Created: ${data.email} (${data.role})  password: ${data.password}`);
   }
 
-  await mongoose.disconnect();
+  await prisma.$disconnect();
   console.log('Done.');
 }
 

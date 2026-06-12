@@ -1,77 +1,97 @@
-const User = require('../models/User.model');
+const prisma = require('../config/prisma');
 const ApiError = require('../utils/ApiError');
+const bcrypt = require('bcryptjs');
 
 const getProfile = async (userId) => {
-  const user = await User.findById(userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { addresses: true },
+  });
   if (!user) throw new ApiError(404, 'User not found');
-  return user;
+
+  const userResponse = { ...user };
+  delete userResponse.password;
+  return userResponse;
 };
 
 const updateProfile = async (userId, updateData) => {
-  const allowed = ['name', 'phone', 'avatar'];
+  const allowed = ['name', 'email', 'phone', 'avatar', 'telegram', 'instagram'];
   const filteredData = Object.keys(updateData)
     .filter((key) => allowed.includes(key))
     .reduce((obj, key) => ({ ...obj, [key]: updateData[key] }), {});
 
-  const user = await User.findByIdAndUpdate(userId, filteredData, {
-    new: true,
-    runValidators: true,
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: filteredData,
   });
   if (!user) throw new ApiError(404, 'User not found');
-  return user;
+
+  const userResponse = { ...user };
+  delete userResponse.password;
+  return userResponse;
 };
 
 const changePassword = async (userId, currentPassword, newPassword) => {
-  const user = await User.findById(userId).select('+password');
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, 'User not found');
 
-  const isMatch = await user.comparePassword(currentPassword);
+  const isMatch = await bcrypt.compare(currentPassword, user.password);
   if (!isMatch) throw new ApiError(400, 'Current password is incorrect');
 
-  user.password = newPassword;
-  await user.save();
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashedPassword },
+  });
+
   return { message: 'Password changed successfully' };
 };
 
 const addAddress = async (userId, addressData) => {
-  const user = await User.findById(userId);
-  if (!user) throw new ApiError(404, 'User not found');
+  return await prisma.$transaction(async (tx) => {
+    if (addressData.isDefault) {
+      await tx.address.updateMany({
+        where: { userId },
+        data: { isDefault: false },
+      });
+    }
 
-  if (addressData.isDefault) {
-    user.addresses.forEach((addr) => (addr.isDefault = false));
-  }
+    await tx.address.create({
+      data: {
+        ...addressData,
+        userId,
+      },
+    });
 
-  user.addresses.push(addressData);
-  await user.save();
-  return user.addresses;
+    return await tx.address.findMany({ where: { userId } });
+  });
 };
 
 const updateAddress = async (userId, addressId, addressData) => {
-  const user = await User.findById(userId);
-  if (!user) throw new ApiError(404, 'User not found');
+  return await prisma.$transaction(async (tx) => {
+    if (addressData.isDefault) {
+      await tx.address.updateMany({
+        where: { userId },
+        data: { isDefault: false },
+      });
+    }
 
-  const address = user.addresses.id(addressId);
-  if (!address) throw new ApiError(404, 'Address not found');
+    await tx.address.update({
+      where: { id: addressId, userId },
+      data: addressData,
+    });
 
-  if (addressData.isDefault) {
-    user.addresses.forEach((addr) => (addr.isDefault = false));
-  }
-
-  Object.assign(address, addressData);
-  await user.save();
-  return user.addresses;
+    return await tx.address.findMany({ where: { userId } });
+  });
 };
 
 const deleteAddress = async (userId, addressId) => {
-  const user = await User.findById(userId);
-  if (!user) throw new ApiError(404, 'User not found');
-
-  const address = user.addresses.id(addressId);
-  if (!address) throw new ApiError(404, 'Address not found');
-
-  address.deleteOne();
-  await user.save();
-  return user.addresses;
+  await prisma.address.delete({
+    where: { id: addressId, userId },
+  });
+  return await prisma.address.findMany({ where: { userId } });
 };
 
 module.exports = {

@@ -3,26 +3,7 @@ import { useAuth } from "../../store";
 import { useI18n } from "../../i18n";
 import { reportsApi } from "../../services/api/reports.api";
 
-const initialReportCards = [
-  {
-    titleKey: "seeds.reports.dailyActiveUsers.title",
-    value: "4,284",
-    noteKey: "seeds.reports.dailyActiveUsers.note",
-    color: "from-slate-800 via-slate-700 to-slate-800"
-  },
-  {
-    titleKey: "seeds.reports.weeklyRegistrations.title",
-    value: "742",
-    noteKey: "seeds.reports.weeklyRegistrations.note",
-    color: "from-slate-800 via-slate-700 to-slate-800"
-  },
-  {
-    titleKey: "seeds.reports.failedLogins.title",
-    value: "19",
-    noteKey: "seeds.reports.failedLogins.note",
-    color: "from-slate-800 via-slate-700 to-slate-800"
-  }
-];
+const initialReportCards = [];
 
 export function ReportsPage() {
   const { hasPermission } = useAuth();
@@ -43,26 +24,26 @@ export function ReportsPage() {
       let data;
       if (type === "admin-activity") {
         data = await reportsApi.getAdminActivity({ from, to });
+        setCards([
+          { title: "Umumiy Adminlar", value: formatNum(data.totalAdmins ?? 0), note: "Barcha ro'yxatdan o'tganlar", color: "from-blue-800 via-blue-700 to-blue-800" },
+          { title: "Faol Adminlar", value: formatNum(data.activeAdmins ?? 0), note: "Tizimga ruxsati borlar", color: "from-green-800 via-green-700 to-green-800" },
+          { title: "Bloklanganlar", value: formatNum((data.totalAdmins || 0) - (data.activeAdmins || 0)), note: "Tizimga kirolmaydiganlar", color: "from-red-800 via-red-700 to-red-800" }
+        ]);
       } else if (type === "security") {
         data = await reportsApi.getSecurity({ from, to });
+        setCards([
+          { title: "Bloklanganlar (Yangi)", value: formatNum(data.blockedUsers ?? 0), note: "Tanlangan davrda bloklangan", color: "from-red-800 via-red-700 to-red-800" },
+          { title: "Jami Bloklanganlar", value: formatNum(data.blockedAccounts ?? 0), note: "Umumiy bloklangan foydalanuvchilar", color: "from-orange-800 via-orange-700 to-orange-800" },
+          { title: "Xato Kirishlar", value: formatNum(data.failedAttempts ?? 0), note: "Noto'g'ri parol kiritishlar", color: "from-slate-800 via-slate-700 to-slate-800" }
+        ]);
       } else {
         data = await reportsApi.getOverview({ from, to });
+        setCards([
+          { title: "Jami Foydalanuvchilar", value: formatNum(data.totalUsers ?? 0), note: "Tizimda ro'yxatdan o'tganlar", color: "from-blue-800 via-blue-700 to-blue-800" },
+          { title: "Jami Daromad", value: formatNum(data.totalRevenue ?? 0) + " so'm", note: "Tasdiqlangan to'lovlar (davr)", color: "from-green-800 via-green-700 to-green-800" },
+          { title: "Jami Buyurtmalar", value: formatNum(data.totalOrders ?? 0), note: "Barcha xaridlar soni", color: "from-purple-800 via-purple-700 to-purple-800" }
+        ]);
       }
-
-      setCards([
-        {
-          ...initialReportCards[0],
-          value: formatNum(data.dailyActiveUsers ?? data.dailyActiveUsersCount ?? 4284)
-        },
-        {
-          ...initialReportCards[1],
-          value: formatNum(data.weeklyRegistrations ?? data.weeklyRegistrationsCount ?? 742)
-        },
-        {
-          ...initialReportCards[2],
-          value: formatNum(data.failedLogins ?? data.failedAttempts ?? 19)
-        }
-      ]);
     } catch (err) {
       setError(err?.message || "Serverdan ma'lumot olishda xato");
     } finally {
@@ -125,11 +106,11 @@ export function ReportsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5">
-          {cards.map((card) => (
-            <div key={card.titleKey} className={`bg-gradient-to-br ${card.color} rounded-2xl p-5 ring-1 ring-white/10 shadow-card`}>
-              <p className="text-xs text-white/70 font-medium mb-2">{t(card.titleKey)}</p>
+          {cards.map((card, i) => (
+            <div key={i} className={`bg-gradient-to-br ${card.color} rounded-2xl p-5 ring-1 ring-white/10 shadow-card`}>
+              <p className="text-xs text-white/70 font-medium mb-2">{card.title}</p>
               <p className="text-3xl font-bold text-white">{card.value}</p>
-              <p className="text-xs text-white/60 mt-2">{t(card.noteKey)}</p>
+              <p className="text-xs text-white/60 mt-2">{card.note}</p>
             </div>
           ))}
         </div>

@@ -1,7 +1,14 @@
-const User = require('../models/User.model');
-const Product = require('../models/Product.model');
-const Order = require('../models/Order.model');
+const prisma = require('../config/prisma');
 const ApiError = require('../utils/ApiError');
+const bcrypt = require('bcryptjs');
+
+const stripPassword = (user) => {
+  if (!user) return user;
+  const { password, ...rest } = user;
+  return rest;
+};
+
+const stripPasswordMany = (users) => users.map(stripPassword);
 
 const DAYS_UZ = ['Yak', 'Dush', 'Sesh', 'Chor', 'Pay', 'Juma', 'Shan'];
 const MONTHS_UZ = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
@@ -26,74 +33,70 @@ const getDashboardStats = async () => {
     totalOrders,
     revenueResult,
     recentOrders,
-    ordersByStatus,
+    ordersByStatusRaw,
     weeklyUsersRaw,
     monthlyOrdersRaw,
   ] = await Promise.all([
-    User.countDocuments({ role: 'USER' }),
-    Product.countDocuments({ isActive: true }),
-    Order.countDocuments(),
-    Order.aggregate([
-      { $match: { paymentStatus: 'paid' } },
-      { $group: { _id: null, total: { $sum: '$totalPrice' } } },
-    ]),
-    Order.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('user', 'name email'),
-    Order.aggregate([
-      { $group: { _id: '$orderStatus', count: { $sum: 1 } } },
-    ]),
-    // Weekly user registrations (last 7 days)
-    User.aggregate([
-      { $match: { createdAt: { $gte: sevenDaysAgo }, role: 'USER' } },
-      {
-        $group: {
-          _id: { $dayOfWeek: '$createdAt' }, // 1=Sun .. 7=Sat
-          users: { $sum: 1 },
-        },
-      },
-    ]),
-    // Monthly orders + revenue (last 6 months)
-    Order.aggregate([
-      { $match: { createdAt: { $gte: sixMonthsAgo } } },
-      {
-        $group: {
-          _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
-          orders: { $sum: 1 },
-          revenue: { $sum: '$totalPrice' },
-        },
-      },
-      { $sort: { '_id.year': 1, '_id.month': 1 } },
-    ]),
+    prisma.user.count({ where: { role: 'USER' } }),
+    prisma.product.count({ where: { isActive: true } }),
+    prisma.order.count(),
+    prisma.order.aggregate({
+      where: { paymentStatus: 'paid' },
+      _sum: { totalPrice: true },
+    }),
+    prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { user: { select: { name: true, email: true } } },
+    }),
+    prisma.order.groupBy({
+      by: ['orderStatus'],
+      _count: { _all: true },
+    }),
+    // Weekly user registrations (simplified for Prisma)
+    prisma.user.findMany({
+      where: { createdAt: { gte: sevenDaysAgo }, role: 'USER' },
+      select: { createdAt: true },
+    }),
+    // Monthly orders + revenue (simplified for Prisma)
+    prisma.order.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true, totalPrice: true },
+    }),
   ]);
 
-  const totalRevenue = revenueResult[0]?.total || 0;
+  const totalRevenue = revenueResult._sum.totalPrice || 0;
+  const ordersByStatus = ordersByStatusRaw.map(s => ({ _id: s.orderStatus, count: s._count._all }));
 
-  // Build weekly chart — fill missing days with 0
+  // Build weekly chart
   const weeklyMap = {};
-  weeklyUsersRaw.forEach((d) => { weeklyMap[d._id] = d.users; });
+  weeklyUsersRaw.forEach(u => {
+    const day = u.createdAt.getDay(); // 0-6
+    weeklyMap[day] = (weeklyMap[day] || 0) + 1;
+  });
   const weeklyUsers = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(sevenDaysAgo);
     date.setDate(sevenDaysAgo.getDate() + i);
-    const dow = date.getDay(); // 0=Sun
-    const mongoKey = dow + 1;  // MongoDB $dayOfWeek: 1=Sun
+    const dow = date.getDay();
     return {
       day: DAYS_UZ[dow],
-      users: weeklyMap[mongoKey] || 0,
-      active: Math.round((weeklyMap[mongoKey] || 0) * 0.75),
+      users: weeklyMap[dow] || 0,
+      active: Math.round((weeklyMap[dow] || 0) * 0.75),
     };
   });
 
-  // Build monthly chart — fill missing months with 0
+  // Build monthly chart
   const monthlyMap = {};
-  monthlyOrdersRaw.forEach((d) => {
-    monthlyMap[`${d._id.year}-${d._id.month}`] = { orders: d.orders, revenue: d.revenue };
+  monthlyOrdersRaw.forEach(o => {
+    const key = `${o.createdAt.getFullYear()}-${o.createdAt.getMonth()}`;
+    if (!monthlyMap[key]) monthlyMap[key] = { orders: 0, revenue: 0 };
+    monthlyMap[key].orders++;
+    monthlyMap[key].revenue += o.totalPrice;
   });
   const monthlyOrders = Array.from({ length: 6 }, (_, i) => {
     const date = new Date(sixMonthsAgo);
     date.setMonth(sixMonthsAgo.getMonth() + i);
-    const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
     const entry = monthlyMap[key] || { orders: 0, revenue: 0 };
     return {
       month: MONTHS_UZ[date.getMonth()],
@@ -116,108 +119,224 @@ const getDashboardStats = async () => {
 
 const getAllUsers = async ({ page = 1, limit = 20, search, role } = {}) => {
   const skip = (Number(page) - 1) * Number(limit);
-  const filter = {};
+  const take = Number(limit);
+  const where = {};
 
   if (search) {
-    filter.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
     ];
   }
-  if (role) filter.role = role;
+  if (role) where.role = role;
 
   const [users, total] = await Promise.all([
-    User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
-    User.countDocuments(filter),
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    }),
+    prisma.user.count({ where }),
   ]);
 
-  return { users, total, page: Number(page), pages: Math.ceil(total / Number(limit)) };
+  return { users: stripPasswordMany(users), total, page: Number(page), pages: Math.ceil(total / take) };
 };
 
 const getUserById = async (userId) => {
-  const user = await User.findById(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, 'User not found');
-  return user;
+  return stripPassword(user);
+};
+
+const createUserByAdmin = async ({ name, email, password, phone, role }) => {
+  // Email mavjud bo'lsa, takrorlanishni tekshir
+  if (email) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw new ApiError(409, 'Bu email allaqachon ro\'yxatdan o\'tgan');
+  }
+
+  // Telefon mavjud bo'lsa, takrorlanishni tekshir
+  if (phone) {
+    const existingPhone = await prisma.user.findFirst({ where: { phone } });
+    if (existingPhone) throw new ApiError(409, 'Bu telefon raqam allaqachon ro\'yxatdan o\'tgan');
+  }
+
+  if (!email && !phone) {
+    throw new ApiError(400, 'Email yoki telefon raqam talab qilinadi');
+  }
+
+  if (!password) {
+    throw new ApiError(400, 'Parol talab qilinadi');
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  const user = await prisma.user.create({
+    data: {
+      name,
+      email: email || null,
+      password: hashedPassword,
+      phone: phone || null,
+      role: role?.toUpperCase() || 'USER',
+    },
+  });
+
+  return stripPassword(user);
+};
+
+const updateUserByAdmin = async (userId, data) => {
+  const { name, email, phone, role, password } = data;
+  const updateData = {};
+  if (name !== undefined) updateData.name = name;
+  if (email !== undefined) updateData.email = email;
+  if (phone !== undefined) updateData.phone = phone;
+  if (role !== undefined) updateData.role = role;
+  if (password) {
+    const salt = await bcrypt.genSalt(10);
+    updateData.password = await bcrypt.hash(password, salt);
+  }
+
+  try {
+    const user = await prisma.user.update({ where: { id: userId }, data: updateData });
+    return stripPassword(user);
+  } catch (err) {
+    if (err.code === 'P2002') throw new ApiError(409, 'Email already in use');
+    if (err.code === 'P2025') throw new ApiError(404, 'User not found');
+    throw err;
+  }
 };
 
 const blockUser = async (userId, adminId) => {
-  if (userId.toString() === adminId.toString()) {
+  if (userId === adminId) {
     throw new ApiError(400, 'You cannot block yourself');
   }
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { isBlocked: true },
-    { new: true }
-  );
-  if (!user) throw new ApiError(404, 'User not found');
-  return user;
+  try {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { isBlocked: true },
+    });
+    return stripPassword(user);
+  } catch (err) {
+    if (err.code === 'P2025') throw new ApiError(404, 'User not found');
+    throw err;
+  }
 };
 
 const unblockUser = async (userId) => {
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { isBlocked: false },
-    { new: true }
-  );
-  if (!user) throw new ApiError(404, 'User not found');
-  return user;
+  try {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { isBlocked: false },
+    });
+    return stripPassword(user);
+  } catch (err) {
+    if (err.code === 'P2025') throw new ApiError(404, 'User not found');
+    throw err;
+  }
 };
 
 const deleteUser = async (userId, adminId) => {
-  if (userId.toString() === adminId.toString()) {
+  if (userId === adminId) {
     throw new ApiError(400, 'You cannot delete yourself');
   }
-  const user = await User.findByIdAndDelete(userId);
-  if (!user) throw new ApiError(404, 'User not found');
-  return { message: 'User deleted successfully' };
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+    return { message: 'User deleted successfully' };
+  } catch (err) {
+    if (err.code === 'P2025') throw new ApiError(404, 'User not found');
+    throw err;
+  }
+};
+
+const getAllAdmins = async ({ page = 1, limit = 50 } = {}) => {
+  const skip = (Number(page) - 1) * Number(limit);
+  const take = Number(limit);
+  const where = { role: { in: ['ADMIN', 'SUPER_ADMIN'] } };
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+    prisma.user.count({ where }),
+  ]);
+
+  return { users: stripPasswordMany(users), total, page: Number(page), pages: Math.ceil(total / take) };
+};
+
+const toggleAdminStatus = async (userId, adminId) => {
+  if (userId === adminId) throw new ApiError(400, 'You cannot change your own status');
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+    throw new ApiError(404, 'Admin not found');
+  }
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { isBlocked: !user.isBlocked },
+  });
+  return stripPassword(updated);
 };
 
 const getAllOrders = async ({ page = 1, limit = 20, status } = {}) => {
   const skip = (Number(page) - 1) * Number(limit);
-  const filter = {};
-  if (status) filter.orderStatus = status;
+  const take = Number(limit);
+  const where = {};
+  if (status) where.orderStatus = status;
 
   const [orders, total] = await Promise.all([
-    Order.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .populate('user', 'name email'),
-    Order.countDocuments(filter),
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+      include: { user: { select: { name: true, email: true } } },
+    }),
+    prisma.order.count({ where }),
   ]);
 
-  return { orders, total, page: Number(page), pages: Math.ceil(total / Number(limit)) };
+  return { orders, total, page: Number(page), pages: Math.ceil(total / take) };
 };
-
-// ── Admin Registration ─────────────────────────────────────────────────────
 
 const registerSuperAdmin = async ({ name, email, password, setupKey }) => {
   if (!setupKey || setupKey !== process.env.ADMIN_SETUP_KEY) {
     throw new ApiError(403, 'Invalid setup key');
   }
 
-  const existing = await User.findOne({ email });
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new ApiError(409, 'Email already registered');
 
-  const user = await User.create({ name, email, password, role: 'SUPER_ADMIN' });
-  return user;
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  const user = await prisma.user.create({
+    data: { name, email, password: hashedPassword, role: 'SUPER_ADMIN' },
+  });
+  return stripPassword(user);
 };
 
 const registerAdmin = async ({ name, email, password }) => {
-  const existing = await User.findOne({ email });
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new ApiError(409, 'Email already registered');
 
-  const user = await User.create({ name, email, password, role: 'ADMIN' });
-  return user;
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  const user = await prisma.user.create({
+    data: { name, email, password: hashedPassword, role: 'ADMIN' },
+  });
+  return stripPassword(user);
 };
 
 module.exports = {
   getDashboardStats,
   getAllUsers,
   getUserById,
+  createUserByAdmin,
+  updateUserByAdmin,
   blockUser,
   unblockUser,
   deleteUser,
+  getAllAdmins,
+  toggleAdminStatus,
   getAllOrders,
   registerSuperAdmin,
   registerAdmin,

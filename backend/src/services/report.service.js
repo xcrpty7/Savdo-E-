@@ -1,5 +1,4 @@
-const Sale = require('../models/Sale.model');
-const Product = require('../models/Product.model');
+const prisma = require('../config/prisma');
 
 /**
  * Build a date range for a given day
@@ -23,75 +22,90 @@ const monthRange = (yearMonth) => {
 };
 
 const aggregateSales = async (userId, startDate, endDate) => {
-  const result = await Sale.aggregate([
-    {
-      $match: {
-        user: userId,
-        createdAt: { $gte: startDate, $lte: endDate },
-      },
+  const stats = await prisma.sale.aggregate({
+    where: {
+      userId,
+      createdAt: { gte: startDate, lte: endDate },
     },
-    {
-      $group: {
-        _id: null,
-        totalRevenue: { $sum: '$totalRevenue' },
-        totalCost: { $sum: '$totalCost' },
-        totalProfit: { $sum: '$profit' },
-        salesCount: { $sum: 1 },
-        avgProfit: { $avg: '$profit' },
-      },
+    _sum: {
+      totalRevenue: true,
+      totalCost: true,
+      profit: true,
     },
-  ]);
+    _count: {
+      _all: true,
+    },
+    _avg: {
+      profit: true,
+    },
+  });
 
-  return result[0] || {
-    totalRevenue: 0,
-    totalCost: 0,
-    totalProfit: 0,
-    salesCount: 0,
-    avgProfit: 0,
+  return {
+    totalRevenue: stats._sum.totalRevenue || 0,
+    totalCost: stats._sum.totalCost || 0,
+    totalProfit: stats._sum.profit || 0,
+    salesCount: stats._count._all || 0,
+    avgProfit: stats._avg.profit || 0,
   };
 };
 
 const topProducts = async (userId, startDate, endDate, limit = 5) => {
-  return Sale.aggregate([
-    {
-      $match: {
-        user: userId,
-        createdAt: { $gte: startDate, $lte: endDate },
+  const result = await prisma.sale.groupBy({
+    by: ['productName'],
+    where: {
+      userId,
+      createdAt: { gte: startDate, lte: endDate },
+    },
+    _sum: {
+      profit: true,
+      totalRevenue: true,
+      quantity: true,
+    },
+    _count: {
+      _all: true,
+    },
+    orderBy: {
+      _sum: {
+        profit: 'desc',
       },
     },
-    {
-      $group: {
-        _id: '$productName',
-        totalProfit: { $sum: '$profit' },
-        totalRevenue: { $sum: '$totalRevenue' },
-        salesCount: { $sum: 1 },
-        totalQty: { $sum: '$quantity' },
-      },
-    },
-    { $sort: { totalProfit: -1 } },
-    { $limit: limit },
-  ]);
+    take: limit,
+  });
+
+  return result.map(r => ({
+    _id: r.productName,
+    totalProfit: r._sum.profit,
+    totalRevenue: r._sum.totalRevenue,
+    salesCount: r._count._all,
+    totalQty: r._sum.quantity,
+  }));
 };
 
 const getDailyReport = async (userId, dateStr) => {
   const { start, end } = dayRange(dateStr || new Date().toISOString().slice(0, 10));
-  const [stats, products, hourlySales] = await Promise.all([
+  const [stats, products, salesRaw] = await Promise.all([
     aggregateSales(userId, start, end),
     topProducts(userId, start, end),
-    // Hourly breakdown
-    Sale.aggregate([
-      { $match: { user: userId, createdAt: { $gte: start, $lte: end } } },
-      {
-        $group: {
-          _id: { $hour: '$createdAt' },
-          revenue: { $sum: '$totalRevenue' },
-          profit: { $sum: '$profit' },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { '_id': 1 } },
-    ]),
+    prisma.sale.findMany({
+      where: { userId, createdAt: { gte: start, lte: end } },
+      select: { createdAt: true, totalRevenue: true, profit: true },
+    }),
   ]);
+
+  // Hourly breakdown manually from salesRaw
+  const hourlyMap = {};
+  salesRaw.forEach(s => {
+    const hour = s.createdAt.getHours();
+    if (!hourlyMap[hour]) hourlyMap[hour] = { revenue: 0, profit: 0, count: 0 };
+    hourlyMap[hour].revenue += s.totalRevenue;
+    hourlyMap[hour].profit += s.profit;
+    hourlyMap[hour].count++;
+  });
+
+  const hourlySales = Object.keys(hourlyMap).map(hour => ({
+    _id: parseInt(hour),
+    ...hourlyMap[hour],
+  })).sort((a, b) => a._id - b._id);
 
   return { date: dateStr, stats, topProducts: products, hourlySales };
 };
@@ -100,25 +114,29 @@ const getMonthlyReport = async (userId, yearMonth) => {
   const ym = yearMonth || new Date().toISOString().slice(0, 7);
   const { start, end } = monthRange(ym);
 
-  const [stats, products, dailySales] = await Promise.all([
+  const [stats, products, salesRaw] = await Promise.all([
     aggregateSales(userId, start, end),
     topProducts(userId, start, end, 10),
-    // Daily breakdown for the month
-    Sale.aggregate([
-      { $match: { user: userId, createdAt: { $gte: start, $lte: end } } },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
-          },
-          revenue: { $sum: '$totalRevenue' },
-          profit: { $sum: '$profit' },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { '_id': 1 } },
-    ]),
+    prisma.sale.findMany({
+      where: { userId, createdAt: { gte: start, lte: end } },
+      select: { createdAt: true, totalRevenue: true, profit: true },
+    }),
   ]);
+
+  // Daily breakdown manually from salesRaw
+  const dailyMap = {};
+  salesRaw.forEach(s => {
+    const date = s.createdAt.toISOString().slice(0, 10);
+    if (!dailyMap[date]) dailyMap[date] = { revenue: 0, profit: 0, count: 0 };
+    dailyMap[date].revenue += s.totalRevenue;
+    dailyMap[date].profit += s.profit;
+    dailyMap[date].count++;
+  });
+
+  const dailySales = Object.keys(dailyMap).map(date => ({
+    _id: date,
+    ...dailyMap[date],
+  })).sort((a, b) => a._id.localeCompare(b._id));
 
   return { month: ym, stats, topProducts: products, dailySales };
 };
@@ -131,13 +149,150 @@ const getSummary = async (userId) => {
     aggregateSales(userId, ...Object.values(dayRange(today))),
     aggregateSales(userId, ...Object.values(monthRange(thisMonth))),
     aggregateSales(userId, new Date(0), new Date()),
-    Product.find({ owner: userId, stock: { $lte: 5 } })
-      .select('name stock unit')
-      .sort({ stock: 1 })
-      .limit(10),
+    prisma.product.findMany({
+      where: { ownerId: userId, stock: { lte: 5 } },
+      select: { name: true, stock: true, unit: true },
+      orderBy: { stock: 'asc' },
+      take: 10,
+    }),
   ]);
 
   return { today: todayStats, thisMonth: monthStats, allTime: allTimeStats, lowStock };
 };
 
-module.exports = { getDailyReport, getMonthlyReport, getSummary };
+// ── Admin-level Reports (cross-user) ────────────────────────────────────────
+
+const getAdminOverview = async ({ from, to } = {}) => {
+  const now = new Date();
+  const rangeStart = from ? new Date(from) : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const rangeEnd = to ? new Date(to) : now;
+  rangeEnd.setHours(23, 59, 59, 999);
+  rangeStart.setHours(0, 0, 0, 0);
+
+  const dailyActiveUsers = await prisma.user.count({
+    where: { lastLogin: { gte: rangeStart, lte: rangeEnd } },
+  });
+
+  const weeklyRegistrations = await prisma.user.count({
+    where: { createdAt: { gte: rangeStart, lte: rangeEnd }, role: 'USER' },
+  });
+
+  const failedLogins = await prisma.auditLog.count({
+    where: { action: 'LOGIN_FAILED', createdAt: { gte: rangeStart, lte: rangeEnd } },
+  });
+
+  const totalUsers = await prisma.user.count({ where: { role: 'USER' } });
+  const totalProducts = await prisma.product.count({ where: { isActive: true } });
+  const totalOrders = await prisma.order.count();
+
+  const revenueResult = await prisma.order.aggregate({
+    where: { createdAt: { gte: rangeStart, lte: rangeEnd }, paymentStatus: 'paid' },
+    _sum: { totalPrice: true },
+  });
+
+  const totalRevenue = revenueResult._sum.totalPrice || 0;
+
+  return {
+    dailyActiveUsers,
+    weeklyRegistrations,
+    failedLogins,
+    totalUsers,
+    totalProducts,
+    totalOrders,
+    totalRevenue,
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+  };
+};
+
+const getAdminActivity = async ({ from, to } = {}) => {
+  const rangeStart = from ? new Date(from) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rangeEnd = to ? new Date(to) : new Date();
+  rangeEnd.setHours(23, 59, 59, 999);
+  rangeStart.setHours(0, 0, 0, 0);
+
+  const admins = await prisma.user.findMany({
+    where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+    select: { id: true, name: true, email: true, lastLogin: true, createdAt: true, isBlocked: true },
+  });
+
+  const logs = admins.map((a) => ({
+    adminId: a.id,
+    name: a.name,
+    email: a.email,
+    status: a.isBlocked ? 'suspended' : 'active',
+    lastActive: a.lastLogin ? a.lastLogin.toISOString() : null,
+    registeredAt: a.createdAt.toISOString(),
+  }));
+
+  return {
+    totalAdmins: admins.length,
+    activeAdmins: admins.filter((a) => !a.isBlocked).length,
+    logs,
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+  };
+};
+
+const getSecurityReport = async ({ from, to } = {}) => {
+  const rangeStart = from ? new Date(from) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rangeEnd = to ? new Date(to) : new Date();
+  rangeEnd.setHours(23, 59, 59, 999);
+  rangeStart.setHours(0, 0, 0, 0);
+
+  const blockedUsers = await prisma.user.count({
+    where: { isBlocked: true, updatedAt: { gte: rangeStart, lte: rangeEnd } },
+  });
+
+  const totalAccounts = await prisma.user.count();
+  const blockedAccounts = await prisma.user.count({ where: { isBlocked: true } });
+
+  const failedAttempts = await prisma.auditLog.count({
+    where: { action: 'LOGIN_FAILED', createdAt: { gte: rangeStart, lte: rangeEnd } },
+  });
+
+  return {
+    blockedUsers,
+    totalAccounts,
+    blockedAccounts,
+    failedAttempts,
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+  };
+};
+
+const exportReport = async ({ type, from, to } = {}) => {
+  const rangeStart = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const rangeEnd = to ? new Date(to) : new Date();
+  rangeEnd.setHours(23, 59, 59, 999);
+  rangeStart.setHours(0, 0, 0, 0);
+
+  if (type === 'users') {
+    const users = await prisma.user.findMany({
+      where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const header = 'ID,Name,Email,Role,Status,CreatedAt\n';
+    const rows = users.map((u) =>
+      `${u.id},${u.name},${u.email},${u.role},${u.isBlocked ? 'blocked' : 'active'},${u.createdAt.toISOString()}`
+    ).join('\n');
+    return header + rows;
+  }
+
+  if (type === 'orders') {
+    const orders = await prisma.order.findMany({
+      where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
+      include: { user: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const header = 'ID,OrderNumber,User,Total,Status,CreatedAt\n';
+    const rows = orders.map((o) =>
+      `${o.id},${o.orderNumber},${o.user.name},${o.totalPrice},${o.orderStatus},${o.createdAt.toISOString()}`
+    ).join('\n');
+    return header + rows;
+  }
+
+  return '';
+};
+
+module.exports = { getDailyReport, getMonthlyReport, getSummary, getAdminOverview, getAdminActivity, getSecurityReport, exportReport };

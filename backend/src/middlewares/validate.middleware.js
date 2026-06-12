@@ -12,7 +12,7 @@ const validate = (schema) => (req, res, next) => {
 
   if (error) {
     const errors = error.details.map((d) => d.message);
-    return next(new ApiError(422, 'Validation failed', errors));
+    return next(new ApiError(422, errors.join(', '), errors));
   }
 
   req.body = value;

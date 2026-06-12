@@ -7,13 +7,13 @@ const push = asyncHandler(async (req, res) => {
   if (!Array.isArray(operations) || operations.length === 0) {
     return res.status(200).json(new ApiResponse(200, { results: [] }, 'Nothing to sync'));
   }
-  const results = await syncService.processSyncBatch(req.user._id, operations);
+  const results = await syncService.processSyncBatch(req.user.id, operations);
   res.status(200).json(new ApiResponse(200, { results }, 'Sync push completed'));
 });
 
 const pull = asyncHandler(async (req, res) => {
   const lastSyncAt = req.query.lastSyncAt;
-  const data = await syncService.pullData(req.user._id, lastSyncAt);
+  const data = await syncService.pullData(req.user.id, lastSyncAt);
   res.status(200).json(new ApiResponse(200, data, 'Sync pull completed'));
 });
 
