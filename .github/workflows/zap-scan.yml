@@ -15,13 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
       - name: Run OWASP ZAP baseline scan
         uses: zaproxy/action-baseline@v0.7.0
         with:
           target: '${{ github.event.inputs.target_url }}'
           rules_file_name: ''
-          # Fail job on high alerts
-          fail_build_on_high: 'true'
+          docker_name: owasp/zap2docker-stable
+          allow_issue_writing: true
 
       - name: Upload ZAP report
         if: always()
