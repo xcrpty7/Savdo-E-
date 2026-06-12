@@ -1,0 +1,43 @@
+name: npm audit (backend, web, mobile)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '0 3 * * 1' # weekly on Monday
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pkg-dir: [backend, web, mobile]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install
+        working-directory: ${{ matrix.pkg-dir }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+
+      - name: Run npm audit
+        working-directory: ${{ matrix.pkg-dir }}
+        run: |
+          npm audit --json > audit-result.json || true
+
+      - name: Upload audit result
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ matrix.pkg-dir }}
+          path: ${{ matrix.pkg-dir }}/audit-result.json
+
+      - name: Fail on high/critical
+        working-directory: ${{ matrix.pkg-dir }}
+        run: |
+          node -e "const fs=require('fs');const r=JSON.parse(fs.readFileSync('audit-result.json','utf8'));const high=Object.values(r.vulnerabilities||{}).some(v=>['high','critical'].includes(v.severity)); if(high){console.error('High/Critical vulnerabilities found'); process.exit(1);} console.log('No high/critical vulns detected');"
