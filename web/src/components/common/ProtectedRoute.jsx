@@ -13,6 +13,6 @@ export function ProtectedRoute({ children }) {
 
 export function GuestRoute({ children }) {
   const accessToken = useAuthStore((s) => s.accessToken);
-  if (accessToken) return <Navigate to="/" replace />;
+  if (accessToken) return <Navigate to="/dashboard" replace />;
   return children;
 }

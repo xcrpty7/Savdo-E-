@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, Text, StyleSheet } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SIZES, FONTS } from '../../constants/theme';
 
 const Input = ({ 
@@ -11,6 +11,8 @@ const Input = ({
   secureTextEntry, 
   keyboardType,
   icon,
+  rightIcon,
+  onRightIconPress,
   containerStyle,
   inputStyle,
   isDark = false
@@ -38,6 +40,15 @@ const Input = ({
           keyboardType={keyboardType}
           autoCapitalize="none"
         />
+        {rightIcon && (
+          <TouchableOpacity
+            onPress={onRightIconPress}
+            style={styles.rightIconContainer}
+            activeOpacity={0.7}
+          >
+            {rightIcon}
+          </TouchableOpacity>
+        )}
       </View>
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -87,7 +98,11 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginRight: 10,
-  }
+  },
+  rightIconContainer: {
+    marginLeft: 8,
+    padding: 2,
+  },
 });
 
 export default Input;

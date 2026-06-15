@@ -14,43 +14,48 @@ const STATUS_COLORS = {
 const PAYMENT_COLORS = {
   pending: "text-yellow-500",
   paid: "text-green-500",
-  failed: "text-red-500"
+  failed: "text-red-500",
+  refunded: "text-blue-400"
 };
 
 export function OrdersPage() {
   const { t } = useI18n();
+  const { orders, loading, updateOrderStatus } = useAdminData();
   usePageTitle(t("navigation.pageMeta.orders.eyebrow"));
 
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusUpdating, setStatusUpdating] = useState(null);
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 10000); // Poll every 10s
-    return () => clearInterval(interval);
+    // Use the data from AdminDataProvider instead of local state
+    // We can still handle errors if the provider doesn't a standard error state for orders
   }, []);
-
-  async function fetchOrders() {
-    try {
-      const res = await ordersApi.getAll({ limit: 100 });
-      setOrders(res.data?.orders || res.data || []);
-      setError("");
-    } catch (err) {
-      if (orders.length === 0) setError("Buyurtmalarni yuklashda xatolik yuz berdi");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleStatusChange(id, newStatus) {
     setStatusUpdating(id);
+    const order = orders.find(o => o.id === id);
     try {
-      await ordersApi.updateStatus(id, newStatus);
-      setOrders((curr) => curr.map(o => o.id === id ? { ...o, orderStatus: newStatus } : o));
+      await updateOrderStatus(id, {
+        orderStatus: newStatus,
+        paymentStatus: order ? order.paymentStatus : undefined
+      });
     } catch (err) {
       alert("Statusni yangilashda xatolik: " + err.message);
+    } finally {
+      setStatusUpdating(null);
+    }
+  }
+
+  async function handlePaymentStatusChange(id, newPaymentStatus) {
+    setStatusUpdating(id);
+    const order = orders.find(o => o.id === id);
+    try {
+      await updateOrderStatus(id, {
+        orderStatus: order ? order.orderStatus : "pending",
+        paymentStatus: newPaymentStatus
+      });
+    } catch (err) {
+      alert("To'lov holatini yangilashda xatolik: " + err.message);
     } finally {
       setStatusUpdating(null);
     }
@@ -98,9 +103,17 @@ export function OrdersPage() {
                         {new Date(o.createdAt).toLocaleString("uz-UZ")}
                       </td>
                       <td className="px-5 py-3">
-                        <span className={`font-medium ${PAYMENT_COLORS[o.paymentStatus] || "text-white/60"}`}>
-                          {o.paymentStatus}
-                        </span>
+                        <select
+                          disabled={statusUpdating === o.id}
+                          value={o.paymentStatus}
+                          onChange={(e) => handlePaymentStatusChange(o.id, e.target.value)}
+                          className={`text-xs font-semibold px-2 py-1 rounded-md outline-none bg-slate-800/80 border border-white/10 cursor-pointer transition-colors ${PAYMENT_COLORS[o.paymentStatus] || "text-white/60"}`}
+                        >
+                          <option value="pending" className="bg-[#0e2037] text-yellow-500">Pending</option>
+                          <option value="paid" className="bg-[#0e2037] text-green-500">Paid</option>
+                          <option value="failed" className="bg-[#0e2037] text-red-500">Failed</option>
+                          <option value="refunded" className="bg-[#0e2037] text-blue-400">Refunded</option>
+                        </select>
                       </td>
                       <td className="px-5 py-3 font-bold text-white">
                         {Number(o.totalPrice).toLocaleString("uz-UZ")} so'm

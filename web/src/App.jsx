@@ -22,6 +22,7 @@ import Sales from './pages/Sales';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import Landing from './pages/Landing';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
@@ -34,7 +35,7 @@ function AdminRoute({ children }) {
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   if (!accessToken) return <Navigate to="/login" replace />;
-  if (!['ADMIN', 'SUPER_ADMIN'].includes(user?.role)) return <Navigate to="/" replace />;
+  if (!['ADMIN', 'SUPER_ADMIN'].includes(user?.role)) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -65,6 +66,9 @@ export default function App() {
       />
 
       <Routes>
+        {/* Public Landing Page */}
+        <Route path="/" element={<Landing />} />
+
         {/* Public routes */}
         <Route path="/login" element={
           <GuestRoute><Login /></GuestRoute>
@@ -78,7 +82,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* Protected user routes */}
-        <Route element={
+        <Route path="/dashboard" element={
           <ProtectedRoute><AppLayout /></ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />

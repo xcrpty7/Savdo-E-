@@ -35,16 +35,21 @@ const priorityStyle = {
 
 export function DashboardPage() {
   const { profile } = useAuth();
-  const { users, admins, auditLogs, notificationFeed, recentActivity } = useAdminData();
+  const { users, admins, auditLogs, notificationFeed, recentActivity, products, orders } = useAdminData();
   const { t } = useI18n();
+
+  const realOrdersCount = orders.length;
+  const realRevenue = orders
+    .filter(o => o.paymentStatus === "paid")
+    .reduce((sum, o) => sum + (Number(o.totalPrice) || 0), 0);
 
   const [weeklyData, setWeeklyData] = useState(weeklyUserStats);
   const [monthlyData, setMonthlyData] = useState(monthlyOrderStats);
   const [dashboardStats, setDashboardStats] = useState({
     totalUsers: users.length,
-    totalProducts: 0,
-    totalOrders: 0,
-    totalRevenue: 0
+    totalProducts: products.length,
+    totalOrders: realOrdersCount,
+    totalRevenue: realRevenue
   });
 
   useEffect(() => {
@@ -56,43 +61,67 @@ export function DashboardPage() {
           if (data?.monthlyOrders?.length) setMonthlyData(data.monthlyOrders);
           setDashboardStats({
             totalUsers: data?.totalUsers || users.length,
-            totalProducts: data?.totalProducts || 0,
-            totalOrders: data?.totalOrders || 0,
-            totalRevenue: data?.totalRevenue || 0
+            totalProducts: data?.totalProducts || products.length,
+            totalOrders: data?.totalOrders !== undefined ? data.totalOrders : realOrdersCount,
+            totalRevenue: data?.totalRevenue !== undefined ? data.totalRevenue : realRevenue
           });
         })
-        .catch(() => {/* fallback to mock data */});
+        .catch((err) => {
+          console.error("Dashboard stats fetch failed:", err);
+          setDashboardStats({
+            totalUsers: users.length,
+            totalProducts: products.length,
+            totalOrders: realOrdersCount,
+            totalRevenue: realRevenue
+          });
+        });
     }
     
     fetchStats();
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, [users.length]);
+  }, []);
 
   const stats = [
     {
       label: t("dashboard.stats.totalUsers"),
       value: dashboardStats.totalUsers,
-      delta: "",
-      tone: "info"
+      tone: "info",
+      icon: (
+        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 005.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      )
     },
     {
       label: t("dashboard.stats.totalProducts"),
       value: dashboardStats.totalProducts,
-      delta: "",
-      tone: "success"
+      tone: "success",
+      icon: (
+        <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+      )
     },
     {
       label: t("dashboard.stats.totalOrders"),
       value: dashboardStats.totalOrders,
-      delta: "",
-      tone: "warning"
+      tone: "warning",
+      icon: (
+        <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+      )
     },
     {
       label: t("dashboard.stats.totalRevenue"),
-      value: dashboardStats.totalRevenue.toLocaleString() + " so'm",
-      delta: "",
-      tone: "danger"
+      value: typeof dashboardStats.totalRevenue === "number" ? dashboardStats.totalRevenue.toLocaleString() + " so'm" : dashboardStats.totalRevenue,
+      tone: "danger",
+      icon: (
+        <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
     }
   ];
 
@@ -138,12 +167,30 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <div key={stat.label} className={`rounded-2xl p-5 ring-1 ring-white/10 bg-slate-900/60 shadow-card`}> 
-            <p className="text-xs text-gray-300 mb-1">{stat.label}</p>
-            <p className="text-3xl font-bold text-white">{String(stat.value).padStart(2, "0")}</p>
-            <span className={`text-xs font-medium mt-1 inline-block text-white/70`}>{stat.delta}</span>
+          <div
+            key={stat.label}
+            className="rounded-2xl p-5 border border-white/10 bg-slate-900/60 shadow-card hover:border-white/20 transition-all duration-300 group relative overflow-hidden"
+          >
+            {/* Background subtle glowing effect */}
+            <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full filter blur-2xl opacity-10 group-hover:opacity-20 transition-opacity duration-300 ${
+              stat.tone === "info" ? "bg-blue-500" :
+              stat.tone === "success" ? "bg-green-500" :
+              stat.tone === "warning" ? "bg-yellow-500" :
+              "bg-red-500"
+            }`} />
+
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{stat.label}</p>
+              <div className="p-2 rounded-xl bg-white/5 border border-white/5 group-hover:scale-110 transition-transform duration-300">
+                {stat.icon}
+              </div>
+            </div>
+            
+            <p className="text-2xl font-bold text-white tracking-tight">
+              {typeof stat.value === "number" ? String(stat.value).padStart(2, "0") : stat.value}
+            </p>
           </div>
         ))}
       </div>

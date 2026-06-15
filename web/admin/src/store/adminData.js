@@ -19,6 +19,7 @@ import { productsApi } from "../services/api/products.api";
 import { adminsApi } from "../services/api/admins.api";
 import { auditLogsApi } from "../services/api/auditLogs.api";
 import { contentApi } from "../services/api/content.api";
+import { ordersApi } from "../services/api/orders.api";
 import { useAuth } from "./index";
 
 const AdminDataContext = createContext(null);
@@ -70,6 +71,7 @@ export function AdminDataProvider({ children }) {
   // ── Remote state ─────────────────────────────────────────
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // ── Local-only state (no backend endpoints yet) ──────────
@@ -90,12 +92,13 @@ export function AdminDataProvider({ children }) {
 
     async function load() {
       try {
-        const [usersRes, productsRes, adminsRes, auditRes, contentRes] = await Promise.allSettled([
+        const [usersRes, productsRes, adminsRes, auditRes, contentRes, ordersRes] = await Promise.allSettled([
           usersApi.getAll({ limit: 100, role: "USER" }),
           productsApi.getAll({ limit: 100 }),
           adminsApi.getAll(),
           auditLogsApi.getAll({ limit: 10 }),
-          contentApi.getAll({ limit: 100 })
+          contentApi.getAll({ limit: 100 }),
+          ordersApi.getAll({ limit: 100 })
         ]);
 
         let rawUsers = [];
@@ -135,6 +138,10 @@ export function AdminDataProvider({ children }) {
             owner: c.owner || "",
             updatedAt: c.updatedAt ? new Date(c.updatedAt).toISOString().slice(0, 10) : ""
           })) : []);
+        }
+        if (ordersRes.status === "fulfilled") {
+          const rawOrders = ordersRes.value?.data?.orders || ordersRes.value?.data || [];
+          setOrders(Array.isArray(rawOrders) ? rawOrders : []);
         }
 
         // Generate dynamic notifications based on fetched users
@@ -399,8 +406,20 @@ export function AdminDataProvider({ children }) {
   }
 
   function savePermissions() {
-    logAudit("Ruxsatlar saqlandi", "permission matrix", "settings", "success");
+    logAudit("Ruxsatlar saqlandi", "Permission Matrix", "settings", "success");
     pushToast("Ruxsatlar saqlandi");
+  }
+
+  async function updateOrderStatus(id, payload) {
+    try {
+      const res = await ordersApi.updateStatus(id, payload);
+      const updated = res.data?.order || res.data || payload;
+      setOrders((curr) => curr.map((o) => (o.id === id ? { ...o, ...updated } : o)));
+      logAudit("Buyurtma statusi yangilandi", id, "order", "info");
+      pushToast("Buyurtma statusi yangilandi");
+    } catch (err) {
+      pushToast(err?.message || "Yangilashda xatolik", "danger");
+    }
   }
 
   // ── Products ──────────────────────────────────────────────
@@ -464,6 +483,7 @@ export function AdminDataProvider({ children }) {
       notificationFeed, recentActivity, toasts,
       roles, permissionMatrix,
       products,
+      orders, setOrders,
       pushToast, dismissToast,
       createUser, updateUser, toggleUserStatus, deleteUser,
       grantAdminToUser, revokeAdminFromUser,
@@ -472,9 +492,10 @@ export function AdminDataProvider({ children }) {
       saveSettings,
       createRole, deleteRole,
       togglePermission, savePermissions,
-      createProduct, updateProduct, deleteProduct, toggleProductStatus
+      createProduct, updateProduct, deleteProduct, toggleProductStatus,
+      updateOrderStatus
     }),
-    [users, admins, contentRows, auditLogs, recentActivity, toasts, roles, permissionMatrix, products, loading]
+    [users, admins, contentRows, auditLogs, recentActivity, toasts, roles, permissionMatrix, products, orders, loading]
   );
 
   return createElement(AdminDataContext.Provider, { value }, children);

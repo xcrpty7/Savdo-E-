@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="container py-10">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <Link to="/" className="text-xl font-bold text-primary-600">
+            <Link to="/dashboard" className="text-xl font-bold text-primary-600">
               Savdo<span className="text-gray-900 dark:text-white">-E</span>
             </Link>
             <p className="mt-2 text-sm text-gray-500">

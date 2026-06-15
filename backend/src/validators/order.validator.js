@@ -25,7 +25,7 @@ const createOrderSchema = Joi.object({
 
 const updateOrderStatusSchema = Joi.object({
   orderStatus: Joi.string()
-    .valid('pending', 'paid', 'shipped', 'delivered', 'cancelled')
+    .valid('pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled')
     .required(),
   paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded'),
 });

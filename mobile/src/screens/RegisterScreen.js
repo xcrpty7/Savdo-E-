@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useTheme } from '../store/ThemeContext';
 import { SIZES, FONTS } from '../constants/theme';
 import apiClient from '../services/api';
 import { setToken, setUser } from '../store/authStore';
+import { formatPhone, cleanIdentifier } from '../utils/phoneFormatter';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
@@ -36,16 +37,31 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await apiClient.post('/auth/register', {
+      const cleanedId = cleanIdentifier(phone);
+      const registerPayload = {
         name: name.trim(),
-        phone: phone.trim(),
         password: password.trim(),
-      });
+      };
 
-      const loginRes = await apiClient.post('/auth/login', {
-        phone: phone.trim(),
+      if (cleanedId.includes('@')) {
+        registerPayload.email = cleanedId;
+      } else {
+        registerPayload.phone = cleanedId;
+      }
+
+      await apiClient.post('/auth/register', registerPayload);
+
+      // Auto-login after registration
+      const loginPayload = {
         password: password.trim(),
-      });
+      };
+      if (cleanedId.includes('@')) {
+        loginPayload.email = cleanedId;
+      } else {
+        loginPayload.phone = cleanedId;
+      }
+
+      const loginRes = await apiClient.post('/auth/login', loginPayload);
 
       const { user, accessToken, refreshToken } = loginRes.data.data;
       await setToken(accessToken, refreshToken);
@@ -65,35 +81,7 @@ export default function RegisterScreen({ navigation }) {
   };
 
   const handlePhoneChange = (text) => {
-    if (/[a-zA-Z@]/.test(text)) {
-      setPhone(text);
-      return;
-    }
-
-    if (!text.startsWith('+998')) {
-      if (text.startsWith('+')) {
-        setPhone(text);
-      } else if (text.length > 0) {
-        let digits = text.replace(/[^\d]/g, '');
-        if (digits) {
-          setPhone('+998 ' + digits);
-        } else {
-          setPhone(text);
-        }
-      } else {
-        setPhone('');
-      }
-      return;
-    }
-
-    let cleaned = text.replace(/[^\d]/g, '');
-    let formatted = '+';
-    if (cleaned.length > 0) formatted += cleaned.substring(0, 3);
-    if (cleaned.length > 3) formatted += ' ' + cleaned.substring(3, 5);
-    if (cleaned.length > 5) formatted += ' ' + cleaned.substring(5, 8);
-    if (cleaned.length > 8) formatted += ' ' + cleaned.substring(8, 10);
-    if (cleaned.length > 10) formatted += ' ' + cleaned.substring(10, 12);
-    setPhone(formatted);
+    setPhone(formatPhone(text));
   };
 
   return (
@@ -142,6 +130,14 @@ export default function RegisterScreen({ navigation }) {
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
             icon={<Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />}
+            rightIcon={
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.textMuted}
+              />
+            }
+            onRightIconPress={() => setShowPassword(!showPassword)}
             containerStyle={{ marginBottom: 24 }}
           />
 

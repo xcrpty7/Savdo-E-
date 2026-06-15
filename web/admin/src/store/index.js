@@ -10,29 +10,34 @@ import { authApi } from "../services/api/auth.api";
 
 const STORAGE_KEY = "savdo-admin-auth";
 
-const ALL_PERMISSIONS = [
-  "dashboard.view",
-  "users.view", "users.create", "users.update", "users.delete",
-  "content.view", "content.create", "content.update", "content.delete",
-  "reports.view", "reports.export",
-  "audit_logs.view",
-  "settings.view", "settings.manage",
-  "profile.view", "profile.update",
-  "admins.manage"
-];
+const ROLE_PERMISSIONS = {
+  SUPER_ADMIN: [
+    "dashboard.view", "users.view", "users.create", "users.update", "users.delete",
+    "content.view", "content.create", "content.update", "content.delete",
+    "reports.view", "reports.export", "audit_logs.view", "settings.view",
+    "settings.manage", "profile.view", "profile.update", "admins.manage"
+  ],
+  ADMIN: [
+    "dashboard.view", "users.view", "users.create", "users.update", "users.delete",
+    "content.view", "content.create", "content.update", "content.delete",
+    "reports.view", "reports.export", "audit_logs.view", "settings.view",
+    "profile.view", "profile.update"
+  ]
+};
 
 function buildProfile(user) {
-  const isPrimary = user.role === "SUPER_ADMIN";
+  const role = user.role?.toUpperCase() || "ADMIN";
+  const isPrimary = role === "SUPER_ADMIN";
   const initials = (user.name || user.email || "AD").slice(0, 2).toUpperCase();
 
   return {
     id: user._id || user.id,
     name: user.name || "Admin",
     email: user.email,
-    role: user.role?.toLowerCase() || "admin",
+    role: role.toLowerCase(),
     isPrimary,
     avatar: initials,
-    permissions: ALL_PERMISSIONS,
+    permissions: ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.ADMIN,
     status: "active",
     lastLogin: { type: "today_at", time: new Date().toTimeString().slice(0, 5) }
   };
@@ -42,7 +47,12 @@ function getStoredAuth() {
   if (typeof window === "undefined") return null;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : null;
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return {
+      profile: parsed.profile,
+      token: "cookie-managed" // Mark as authenticated via cookies
+    };
   } catch {
     return null;
   }
@@ -56,7 +66,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (auth) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        profile: auth.profile,
+        token: "cookie-managed"
+      }));
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -72,13 +85,13 @@ export function AuthProvider({ children }) {
     () => ({
       auth,
       profile: auth?.profile ?? null,
-      isAuthenticated: Boolean(auth?.token),
+      isAuthenticated: Boolean(auth),
 
       login: async (credentials) => {
         const res = await authApi.login(credentials);
-        const { user, accessToken, refreshToken } = res.data;
+        const { user } = res.data;
         const profile = buildProfile(user);
-        const nextAuth = { token: accessToken, refreshToken, profile };
+        const nextAuth = { token: "cookie-managed", profile };
         setAuth(nextAuth);
         return nextAuth;
       },
@@ -90,7 +103,7 @@ export function AuthProvider({ children }) {
 
       logout: async () => {
         try {
-          if (auth?.refreshToken) await authApi.logout();
+          await authApi.logout();
         } catch { /* ignore */ }
         setAuth(null);
       },

@@ -82,7 +82,7 @@ function MainTabs() {
           let iconName;
           if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
           else if (route.name === 'SalesStack') iconName = focused ? 'receipt' : 'receipt-outline';
-          else if (route.name === 'Products') iconName = focused ? 'cube' : 'cube-outline';
+          else if (route.name === 'NewSale') iconName = focused ? 'add-circle' : 'add-circle-outline';
           else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
           return <Ionicons name={iconName} size={22} color={color} />;
         },
@@ -99,19 +99,19 @@ function MainTabs() {
         options={{ title: t('sales.title'), tabBarLabel: t('sales.title') }}
       />
       <Tab.Screen
-        name="NewSale"
-        component={NewSaleScreen}
+        name="Products"
+        component={ProductsScreen}
         options={{
-          title: t('sale.title'),
+          title: t('products.title'),
           tabBarLabel: () => null,
           tabBarButton: (props) => <NewSaleButton {...props} colors={colors} />,
           tabBarIconStyle: { display: 'none' },
         }}
       />
       <Tab.Screen
-        name="Products"
-        component={ProductsScreen}
-        options={{ title: t('products.title'), tabBarLabel: t('products.title') }}
+        name="NewSale"
+        component={NewSaleScreen}
+        options={{ title: t('sale.title'), tabBarLabel: t('sale.title') }}
       />
       <Tab.Screen
         name="Settings"

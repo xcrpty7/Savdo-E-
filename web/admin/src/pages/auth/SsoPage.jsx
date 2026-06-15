@@ -4,27 +4,34 @@ import { useAuth } from "../../store";
 
 const STORAGE_KEY = "savdo-admin-auth";
 
-function buildProfile(user) {
-  const isPrimary = user.role === "SUPER_ADMIN";
-  const initials = (user.name || user.email || "AD").slice(0, 2).toUpperCase();
-  const ALL_PERMISSIONS = [
-    "dashboard.view",
-    "users.view", "users.create", "users.update", "users.delete",
+const ROLE_PERMISSIONS = {
+  SUPER_ADMIN: [
+    "dashboard.view", "users.view", "users.create", "users.update", "users.delete",
     "content.view", "content.create", "content.update", "content.delete",
-    "reports.view", "reports.export",
-    "audit_logs.view",
-    "settings.view", "settings.manage",
-    "profile.view", "profile.update",
-    "admins.manage"
-  ];
+    "reports.view", "reports.export", "audit_logs.view", "settings.view",
+    "settings.manage", "profile.view", "profile.update", "admins.manage"
+  ],
+  ADMIN: [
+    "dashboard.view", "users.view", "users.create", "users.update", "users.delete",
+    "content.view", "content.create", "content.update", "content.delete",
+    "reports.view", "reports.export", "audit_logs.view", "settings.view",
+    "profile.view", "profile.update"
+  ]
+};
+
+function buildProfile(user) {
+  const role = user.role?.toUpperCase() || "ADMIN";
+  const isPrimary = role === "SUPER_ADMIN";
+  const initials = (user.name || user.email || "AD").slice(0, 2).toUpperCase();
+
   return {
     id: user.id,
     name: user.name || "Admin",
     email: user.email,
-    role: user.role?.toLowerCase() || "admin",
+    role: role.toLowerCase(),
     isPrimary,
     avatar: initials,
-    permissions: ALL_PERMISSIONS,
+    permissions: ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.ADMIN,
     status: "active",
     lastLogin: { type: "today_at", time: new Date().toTimeString().slice(0, 5) }
   };
@@ -45,6 +52,9 @@ export function SsoPage() {
     const name     = searchParams.get("name");
     const email    = searchParams.get("email");
     const role     = searchParams.get("role");
+
+    // URLdan maxfiy ma'lumotlarni darhol tozalaymiz (history'da qolmasligi uchun)
+    window.history.replaceState({}, document.title, window.location.pathname);
 
     // Parametrlar to'g'ri va rol admin bo'lsa — saqlab dashboard ga o'tamiz
     if (token && email && ["ADMIN", "SUPER_ADMIN"].includes(role)) {

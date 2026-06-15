@@ -6,6 +6,6 @@ export const ordersApi = {
     http.get("/admin/orders", { params }),
 
   /** PATCH /api/admin/orders/:id/status */
-  updateStatus: (id, orderStatus) =>
-    http.patch(`/admin/orders/${id}/status`, { orderStatus }),
+  updateStatus: (id, payload) =>
+    http.patch(`/admin/orders/${id}/status`, typeof payload === "string" ? { orderStatus: payload } : payload),
 };

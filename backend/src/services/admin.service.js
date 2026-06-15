@@ -187,6 +187,7 @@ const createUserByAdmin = async ({ name, email, password, phone, role }) => {
 };
 
 const updateUserByAdmin = async (userId, data) => {
+  console.log('updateUserByAdmin called with:', { userId, data });
   const { name, email, phone, role, password } = data;
   const updateData = {};
   if (name !== undefined) updateData.name = name;
@@ -202,6 +203,7 @@ const updateUserByAdmin = async (userId, data) => {
     const user = await prisma.user.update({ where: { id: userId }, data: updateData });
     return stripPassword(user);
   } catch (err) {
+    console.error('Prisma update error:', err);
     if (err.code === 'P2002') throw new ApiError(409, 'Email already in use');
     if (err.code === 'P2025') throw new ApiError(404, 'User not found');
     throw err;

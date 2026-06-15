@@ -78,7 +78,6 @@ export function LoginPage() {
               type="text"
               required
               autoComplete="username"
-              placeholder="admin@email.com yoki +998901234567"
               value={form.identifier}
               onChange={(e) => setForm((p) => ({ ...p, identifier: e.target.value }))}
               className="w-full px-4 py-3 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-indigo-500"

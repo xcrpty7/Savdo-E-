@@ -9,12 +9,8 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Request interceptor — attach access token ──────────────────────────────
+// ── Request interceptor — No longer need to manually attach token ──────────────────────
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
   return config;
 });
 
@@ -41,7 +37,7 @@ api.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+            // Since we use HttpOnly cookies, we don't need to manually set the header
             return api(originalRequest);
           })
           .catch((err) => Promise.reject(err));
@@ -51,26 +47,13 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) throw new Error('No refresh token');
+        // Cookies are sent automatically with withCredentials: true
+        await axios.post(`${API_BASE}/auth/refresh-token`, {}, { withCredentials: true });
 
-        const { data } = await axios.post(`${API_BASE}/auth/refresh-token`, {
-          refreshToken,
-        });
-
-        const { accessToken, refreshToken: newRefreshToken } = data.data;
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
-
-        api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
-        processQueue(null, accessToken);
-
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        processQueue(null);
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {
@@ -80,7 +63,6 @@ api.interceptors.response.use(
 
     const status = error.response?.status;
     const message = error.response?.data?.message || 'Something went wrong';
-    // 401 handled by refresh logic; 422 handled by the caller (shows field errors)
     if (status !== 401 && status !== 422) {
       toast.error(message);
     }

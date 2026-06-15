@@ -129,13 +129,13 @@ export default function Login() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
+  const from = location.state?.from?.pathname || '/dashboard';
 
   const handleGoogleSuccess = async ({ credential }) => {
     try {
       const user = await googleLogin(credential);
       if (!['ADMIN', 'SUPER_ADMIN'].includes(user?.role)) {
-        navigate(from === '/login' ? '/' : from, { replace: true });
+        navigate(from === '/login' ? '/dashboard' : from, { replace: true });
       }
     } catch (_) {}
   };
@@ -156,7 +156,7 @@ export default function Login() {
       const user = await login({ email: form.email.trim(), password: form.password });
       // ADMIN/SUPER_ADMIN — authStore o'zi admin panelga SSO orqali yo'naltiradi
       if (!['ADMIN', 'SUPER_ADMIN'].includes(user?.role)) {
-        navigate(from === '/login' ? '/' : from, { replace: true });
+        navigate(from === '/login' ? '/dashboard' : from, { replace: true });
       }
     } catch (_) {}
   };

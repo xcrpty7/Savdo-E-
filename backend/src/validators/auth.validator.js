@@ -22,7 +22,7 @@ const loginSchema = Joi.object({
 }).or('email', 'phone');
 
 const refreshTokenSchema = Joi.object({
-  refreshToken: Joi.string().required(),
+  refreshToken: Joi.string().optional(),
 });
 
 const updateProfileSchema = Joi.object({

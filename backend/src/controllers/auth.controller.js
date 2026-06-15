@@ -21,24 +21,30 @@ const login = asyncHandler(async (req, res) => {
   };
   const { user, accessToken, refreshToken } = await authService.login(req.body, meta);
 
+  res.cookie('accessToken', accessToken, COOKIE_OPTIONS);
   res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
 
   res.status(200).json(
-    new ApiResponse(200, { user, accessToken, refreshToken }, 'Login successful')
+    new ApiResponse(200, { user }, 'Login successful')
   );
 });
 
 const refreshToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken =
-    req.body.refreshToken || req.cookies?.refreshToken;
+    req.cookies?.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, 'No refresh token provided in cookies');
+  }
 
   const { accessToken, refreshToken: newRefreshToken } =
     await authService.refreshTokens(incomingRefreshToken);
 
+  res.cookie('accessToken', accessToken, COOKIE_OPTIONS);
   res.cookie('refreshToken', newRefreshToken, COOKIE_OPTIONS);
 
   res.status(200).json(
-    new ApiResponse(200, { accessToken, refreshToken: newRefreshToken }, 'Tokens refreshed')
+    new ApiResponse(200, null, 'Tokens refreshed')
   );
 });
 

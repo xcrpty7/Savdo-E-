@@ -7,14 +7,10 @@ const useAuthStore = create(
   persist(
     (set, get) => ({
       user: null,
-      accessToken: null,
-      refreshToken: null,
       isLoading: false,
 
-      setTokens: (accessToken, refreshToken) => {
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        set({ accessToken, refreshToken });
+      setTokens: () => {
+        // Tokens are now handled via HttpOnly cookies
       },
 
       register: async (data) => {
@@ -41,17 +37,13 @@ const useAuthStore = create(
         set({ isLoading: true });
         try {
           const res = await authApi.googleAuth(credential);
-          const { user, accessToken, refreshToken } = res.data.data;
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', refreshToken);
-          set({ user, accessToken, refreshToken, isLoading: false });
+          const { user } = res.data.data;
+          set({ user, isLoading: false });
           toast.success(`Xush kelibsiz, ${user.name}!`);
 
           if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
             const adminUrl = import.meta.env.VITE_ADMIN_URL || 'http://localhost:5174';
             const params = new URLSearchParams({
-              token:   accessToken,
-              refresh: refreshToken,
               name:    user.name  || '',
               email:   user.email || '',
               role:    user.role  || '',
@@ -73,18 +65,14 @@ const useAuthStore = create(
         set({ isLoading: true });
         try {
           const res = await authApi.login(credentials);
-          const { user, accessToken, refreshToken } = res.data.data;
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', refreshToken);
-          set({ user, accessToken, refreshToken, isLoading: false });
+          const { user } = res.data.data;
+          set({ user, isLoading: false });
           toast.success(`Welcome back, ${user.name}!`);
 
           // ADMIN / SUPER_ADMIN — admin panelga SSO orqali yo'naltirish
           if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
             const adminUrl = import.meta.env.VITE_ADMIN_URL || 'http://localhost:5174';
             const params = new URLSearchParams({
-              token:   accessToken,
-              refresh: refreshToken,
               name:    user.name  || '',
               email:   user.email || '',
               role:    user.role  || '',
@@ -102,14 +90,11 @@ const useAuthStore = create(
 
       logout: async () => {
         try {
-          const rt = get().refreshToken || localStorage.getItem('refreshToken');
-          await authApi.logout({ refreshToken: rt });
+          await authApi.logout({});
         } catch (_) {
           // ignore network errors on logout
         } finally {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          set({ user: null, accessToken: null, refreshToken: null });
+          set({ user: null });
           toast.success('Logged out');
         }
       },
@@ -119,7 +104,7 @@ const useAuthStore = create(
           const res = await authApi.getMe();
           set({ user: res.data.data.user });
         } catch (_) {
-          set({ user: null, accessToken: null, refreshToken: null });
+          set({ user: null });
         }
       },
 
@@ -132,8 +117,6 @@ const useAuthStore = create(
       name: 'savdo-auth',
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
       }),
     }
   )

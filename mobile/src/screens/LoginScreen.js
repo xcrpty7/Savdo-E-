@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useTheme } from '../store/ThemeContext';
 import { SIZES, FONTS } from '../constants/theme';
 import apiClient from '../services/api';
 import { setToken, setUser } from '../store/authStore';
+import { formatPhone, cleanIdentifier } from '../utils/phoneFormatter';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
@@ -35,13 +36,15 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
+      const cleanedId = cleanIdentifier(phone);
       const payload = { password: password.trim() };
-      const loginId = phone.trim();
-      if (loginId.includes('@')) {
-        payload.email = loginId;
+
+      if (cleanedId.includes('@')) {
+        payload.email = cleanedId;
       } else {
-        payload.phone = loginId;
+        payload.phone = cleanedId;
       }
+
       const response = await apiClient.post('/auth/login', payload);
 
       const { user, accessToken, refreshToken } = response.data.data;
@@ -62,35 +65,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handlePhoneChange = (text) => {
-    if (/[a-zA-Z@]/.test(text)) {
-      setPhone(text);
-      return;
-    }
-
-    if (!text.startsWith('+998')) {
-      if (text.startsWith('+')) {
-        setPhone(text);
-      } else if (text.length > 0) {
-        let digits = text.replace(/[^\d]/g, '');
-        if (digits) {
-          setPhone('+998 ' + digits);
-        } else {
-          setPhone(text);
-        }
-      } else {
-        setPhone('');
-      }
-      return;
-    }
-
-    let cleaned = text.replace(/[^\d]/g, '');
-    let formatted = '+';
-    if (cleaned.length > 0) formatted += cleaned.substring(0, 3);
-    if (cleaned.length > 3) formatted += ' ' + cleaned.substring(3, 5);
-    if (cleaned.length > 5) formatted += ' ' + cleaned.substring(5, 8);
-    if (cleaned.length > 8) formatted += ' ' + cleaned.substring(8, 10);
-    if (cleaned.length > 10) formatted += ' ' + cleaned.substring(10, 12);
-    setPhone(formatted);
+    setPhone(formatPhone(text));
   };
 
   return (
@@ -131,6 +106,14 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
             icon={<Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />}
+            rightIcon={
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.textMuted}
+              />
+            }
+            onRightIconPress={() => setShowPassword(!showPassword)}
             containerStyle={{ marginBottom: 24 }}
           />
 
