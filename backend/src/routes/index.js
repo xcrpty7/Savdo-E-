@@ -12,6 +12,8 @@ const salesRoutes = require('./sales.routes');
 const reportsRoutes = require('./reports.routes');
 const syncRoutes = require('./sync.routes');
 const aiRoutes = require('./ai.routes');
+const paymeRoutes = require('./payme.routes');
+const subscriptionRoutes = require('./subscription.routes');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -24,5 +26,7 @@ router.use('/sales', salesRoutes);
 router.use('/reports', reportsRoutes);
 router.use('/sync', syncRoutes);
 router.use('/ai', aiRoutes);
+router.use('/payme', paymeRoutes);
+router.use('/subscriptions', subscriptionRoutes);
 
 module.exports = router;

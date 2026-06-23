@@ -15,6 +15,11 @@ const getProducts = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, result, 'Products retrieved'));
 });
 
+const getProductBySlug = asyncHandler(async (req, res) => {
+  const product = await productService.getProductBySlug(req.params.slug, req.user._id);
+  res.status(200).json(new ApiResponse(200, { product }, 'Product retrieved'));
+});
+
 const getProductById = asyncHandler(async (req, res) => {
   validateObjectId(req.params.id);
   const product = await productService.getProductById(req.params.id, req.user._id);
@@ -57,6 +62,7 @@ const getCategories = asyncHandler(async (req, res) => {
 module.exports = {
   getProducts,
   getProductById,
+  getProductBySlug,
   createProduct,
   updateProduct,
   deleteProduct,

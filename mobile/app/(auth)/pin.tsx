@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +14,11 @@ export default function PinScreen() {
   const { setRole, verifyPIN } = useRoleStore();
   const t = useT();
   const { c } = useTheme();
+  const shakeTimer = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    return () => clearTimeout(shakeTimer.current);
+  }, []);
 
   function handleKey(k: string) {
     if (k === "⌫") {
@@ -35,7 +40,7 @@ export default function PinScreen() {
       router.back();
     } else {
       setShake(true);
-      setTimeout(() => {
+      shakeTimer.current = setTimeout(() => {
         setPin("");
         setShake(false);
       }, 500);

@@ -3,7 +3,7 @@ const Joi = require('joi');
 const registerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),
   email: Joi.string().email().lowercase().required(),
-  password: Joi.string().min(8).max(128).required(),
+  password: Joi.string().min(1).max(128).required(),
 });
 
 const loginSchema = Joi.object({
@@ -73,6 +73,11 @@ const registerSuperAdminSchema = Joi.object({
   setupKey: Joi.string().required(),
 });
 
+const verifyEmailSchema = Joi.object({
+  email: Joi.string().email().lowercase().required(),
+  code: Joi.string().length(6).required(),
+});
+
 const forgotPasswordSchema = Joi.object({
   email: Joi.string().email().lowercase().required(),
 });
@@ -96,6 +101,7 @@ module.exports = {
   refreshTokenSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  verifyEmailSchema,
   updateProfileSchema,
   addressSchema,
   changePasswordSchema,

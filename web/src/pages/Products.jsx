@@ -33,6 +33,9 @@ export default function Products() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.getProducts(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   const allProducts = data?.data?.data?.products || [];

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, Modal, Share } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, Modal } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -8,54 +8,6 @@ import { Product } from "@/db/models/Product";
 import { useProducts } from "@/hooks/useProducts";
 import { useT } from "@/hooks/useT";
 import { useTheme } from "@/hooks/useTheme";
-
-interface SaleResult {
-  name: string;
-  qty: number;
-  totalAmount: number;
-  profit: number;
-}
-
-async function shareReceipt(result: SaleResult) {
-  const date = new Date().toLocaleString("uz-UZ");
-  const unitPrice = result.qty > 0 ? Math.round(result.totalAmount / result.qty) : 0;
-  const text = [
-    "🧾 SAVDO CHEKI",
-    "━━━━━━━━━━━━━━━━━━━━━",
-    `📅 ${date}`,
-    "━━━━━━━━━━━━━━━━━━━━━",
-    `📦 ${result.name}`,
-    `   ${result.qty} ta × ${unitPrice.toLocaleString()} so'm`,
-    "━━━━━━━━━━━━━━━━━━━━━",
-    `💰 JAMI: ${result.totalAmount.toLocaleString()} so'm`,
-    "━━━━━━━━━━━━━━━━━━━━━",
-    "Savdo ilovasi orqali yozildi",
-  ].join("\n");
-
-  try {
-    await Share.share({ message: text, title: "Savdo cheki" });
-  } catch {}
-}
-
-function generateReceiptLink(result: SaleResult): string {
-  const unitPrice = result.qty > 0 ? Math.round(result.totalAmount / result.qty) : 0;
-  const data = JSON.stringify({
-    n: result.name,
-    q: result.qty,
-    p: unitPrice,
-    a: result.totalAmount,
-    d: new Date().toISOString().slice(0, 10),
-  });
-  const encoded = btoa(unescape(encodeURIComponent(data)));
-  return `https://savdo.uz/r/${encoded}`;
-}
-
-async function shareReceiptLink(result: SaleResult) {
-  try {
-    const link = generateReceiptLink(result);
-    await Share.share({ message: link, title: "Savdo cheki havolasi" });
-  } catch {}
-}
 
 export default function AddSaleScreen() {
   const t = useT();
@@ -146,46 +98,13 @@ export default function AddSaleScreen() {
           <Ionicons name="checkmark" size={52} color={c.primary} />
         </View>
 
-        <Text style={{ color: c.bg, fontSize: 22, fontWeight: "800", marginBottom: 4, textAlign: "center" }}>{t.sales.saleRecorded}</Text>
-        <Text style={{ color: c.bgMuted, fontSize: 15, marginBottom: 36, textAlign: "center" }}>
+        <Text style={{ color: c.bg, fontSize: 22, fontWeight: "800", textAlign: "center" }}>{t.sales.saleRecorded}</Text>
+        <Text style={{ color: c.bg, fontSize: 16, marginBottom: 4, textAlign: "center" }}>
           {result.name} · {result.qty} {t.sales.qty}
         </Text>
-
-        <View style={{ width: "100%", gap: 12, marginBottom: 40 }}>
-          <View style={{ backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 18, padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }}>
-            <Ionicons name="bag" size={28} color={c.bg} />
-            <View>
-              <Text style={{ color: c.bgMuted, fontSize: 12, fontWeight: "600" }}>{t.sales.revenue.toUpperCase()}</Text>
-              <Text style={{ color: "#fff", fontSize: 26, fontWeight: "800" }}>{result.totalAmount.toLocaleString()} so'm</Text>
-            </View>
-          </View>
-
-          <View style={{ backgroundColor: c.bg, borderRadius: 18, padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }}>
-            <Ionicons name="trending-up" size={28} color={c.primary} />
-            <View>
-              <Text style={{ color: c.primaryDark, fontSize: 12, fontWeight: "600" }}>{t.sales.netProfit.toUpperCase()}</Text>
-              <Text style={{ color: c.primaryDark, fontSize: 32, fontWeight: "800" }}>+{result.profit.toLocaleString()} so'm</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Chek share */}
-        <TouchableOpacity
-          onPress={() => shareReceipt(result)}
-          style={{ backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 16, height: 54, width: "100%", alignItems: "center", justifyContent: "center", marginBottom: 8, flexDirection: "row", gap: 8 }}
-        >
-          <Ionicons name="share-social" size={20} color={c.bg} />
-          <Text style={{ color: c.bg, fontWeight: "700", fontSize: 15 }}>{t.sales.shareReceipt}</Text>
-        </TouchableOpacity>
-
-        {/* Receipt link */}
-        <TouchableOpacity
-          onPress={() => shareReceiptLink(result)}
-          style={{ backgroundColor: "rgba(255,255,255,0.10)", borderRadius: 16, height: 54, width: "100%", alignItems: "center", justifyContent: "center", marginBottom: 12, flexDirection: "row", gap: 8, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)" }}
-        >
-          <Ionicons name="link" size={20} color={c.bg} />
-          <Text style={{ color: c.bg, fontWeight: "700", fontSize: 15 }}>{t.sales.shareLink}</Text>
-        </TouchableOpacity>
+        <Text style={{ color: "#fff", fontSize: 36, fontWeight: "800", marginBottom: 40 }}>
+          {result.totalAmount.toLocaleString()} so'm
+        </Text>
 
         <TouchableOpacity
           onPress={resetForNextSale}

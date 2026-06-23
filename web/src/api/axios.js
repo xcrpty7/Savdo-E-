@@ -1,5 +1,6 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import useAuthStore from '../store/authStore';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -11,7 +12,7 @@ const api = axios.create({
 
 // ── Request interceptor — attach access token ──────────────────────────────
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
+  const token = useAuthStore.getState().accessToken || localStorage.getItem('accessToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

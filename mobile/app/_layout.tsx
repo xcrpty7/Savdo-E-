@@ -20,7 +20,9 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    Promise.all([loadToken(), loadLang(), loadTheme(), loadSubscription(), loadRole()]).then(() => setReady(true));
+    Promise.all([loadToken(), loadLang(), loadTheme(), loadSubscription(), loadRole()])
+      .then(() => setReady(true))
+      .catch(() => setReady(true));
   }, []);
 
   useEffect(() => {

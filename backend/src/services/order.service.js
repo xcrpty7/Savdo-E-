@@ -8,7 +8,6 @@ const SHIPPING_THRESHOLD = 50;
 const SHIPPING_COST = 5;
 
 const createOrder = async (userId, { items, shippingAddress, paymentMethod, notes }) => {
-  // Resolve products and validate stock
   const resolvedItems = [];
   let itemsPrice = 0;
 
@@ -17,23 +16,25 @@ const createOrder = async (userId, { items, shippingAddress, paymentMethod, note
     if (!product || !product.isActive) {
       throw new ApiError(404, `Product ${item.product} not found`);
     }
-    if (product.stock < item.quantity) {
+
+    const updated = await Product.findOneAndUpdate(
+      { _id: item.product, stock: { $gte: item.quantity } },
+      { $inc: { stock: -item.quantity } },
+      { new: true, select: 'name images finalPrice' }
+    );
+    if (!updated) {
       throw new ApiError(400, `Insufficient stock for "${product.name}"`);
     }
 
     resolvedItems.push({
       product: product._id,
-      name: product.name,
-      image: product.images[0]?.url || '',
-      price: product.finalPrice,
+      name: updated.name,
+      image: updated.images[0]?.url || '',
+      price: updated.finalPrice,
       quantity: item.quantity,
     });
 
-    itemsPrice += product.finalPrice * item.quantity;
-
-    // Deduct stock
-    product.stock -= item.quantity;
-    await product.save({ validateBeforeSave: false });
+    itemsPrice += updated.finalPrice * item.quantity;
   }
 
   const shippingPrice = itemsPrice >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;

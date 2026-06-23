@@ -94,7 +94,7 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for fast queries
+productSchema.index({ createdBy: 1, name: 1 });
 productSchema.index({ slug: 1 });
 productSchema.index({ category: 1 });
 productSchema.index({ price: 1 });

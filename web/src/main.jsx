@@ -9,19 +9,20 @@ import './index.css';
 import './i18n';
 import useThemeStore from './store/themeStore';
 
-// Eski format ('theme: light') → yangi format ('isDark: true') ga migratsiya
 const saved = localStorage.getItem('savdo-theme');
+let isDark = true;
 if (saved) {
   try {
     const parsed = JSON.parse(saved);
     if ('theme' in (parsed?.state || {})) {
       localStorage.removeItem('savdo-theme');
+    } else if (parsed?.state) {
+      isDark = parsed.state.isDark ?? true;
     }
   } catch (_) {}
 }
 
-// Darhol dark class ni qo'llaymiz (hydration kutmasdan)
-document.documentElement.classList.add('dark');
+document.documentElement.classList.toggle('dark', isDark);
 
 const queryClient = new QueryClient({
   defaultOptions: {

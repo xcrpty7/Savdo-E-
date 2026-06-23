@@ -24,9 +24,10 @@ api.interceptors.response.use(
       original._retry = true;
       try {
         const refreshToken = useAuthStore.getState().refreshToken;
-        const { data } = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
-        useAuthStore.getState().setToken(data.accessToken, data.refreshToken);
-        original.headers.Authorization = `Bearer ${data.accessToken}`;
+        const { data: body } = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
+        const payload = body?.data ?? body;
+        useAuthStore.getState().setToken(payload.accessToken, payload.refreshToken);
+        original.headers.Authorization = `Bearer ${payload.accessToken}`;
         return api(original);
       } catch {
         useAuthStore.getState().clearToken();

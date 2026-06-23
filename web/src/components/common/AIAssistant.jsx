@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { MessageCircle, X, Send, Sparkles, ShoppingBag, TrendingUp, DollarSign, List, Search } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, TrendingUp, DollarSign, List } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import * as productsApi from '../../api/products.api';
 import * as aiApi from '../../api/ai.api';
-import useThemeStore from '../../store/themeStore';
 
 const SUGGESTIONS = (t) => [
     { id: 'cheap', text: t('cheap_products'), icon: <DollarSign size={14} /> },

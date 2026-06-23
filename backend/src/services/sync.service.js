@@ -28,35 +28,39 @@ const processSyncBatch = async (userId, operations) => {
 
       else if (entity === 'product') {
         if (operation === 'create') {
-          const existing = await Product.findOne({ 'name': payload.name, 'createdBy': userId });
-          if (!existing) {
-            const product = await Product.create({
-              ...payload,
-              createdBy: userId,
-              isActive: true,
-            });
-            serverEntityId = product._id;
-          } else {
-            serverEntityId = existing._id;
-          }
+          const { owner, createdBy, _id, ...safePayload } = payload;
+          const product = await Product.findOneAndUpdate(
+            { name: safePayload.name, createdBy: userId },
+            {
+              $setOnInsert: {
+                ...safePayload,
+                createdBy: userId,
+                owner: userId,
+                isActive: true,
+              }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+          serverEntityId = product._id;
         }
 
         else if (operation === 'update') {
-          const product = await Product.findOne({ _id: payload.serverId || entityId });
-          if (product) {
-            // Latest update wins
-            const clientTime = clientUpdatedAt ? new Date(clientUpdatedAt) : new Date(0);
-            const serverTime = product.updatedAt;
-            if (clientTime >= serverTime) {
-              Object.assign(product, payload);
-              await product.save();
-            }
-            serverEntityId = product._id;
-          }
+          const clientTime = clientUpdatedAt ? new Date(clientUpdatedAt) : new Date(0);
+          const { owner, createdBy, _id, ...safePayload } = payload;
+          const product = await Product.findOneAndUpdate(
+            { _id: payload.serverId || entityId, createdBy: userId, updatedAt: { $lte: clientTime } },
+            { $set: safePayload },
+            { new: true }
+          );
+          if (product) serverEntityId = product._id;
         }
 
         else if (operation === 'delete') {
-          await Product.findByIdAndUpdate(payload.serverId || entityId, { isActive: false });
+          const deleted = await Product.findOneAndUpdate(
+            { _id: payload.serverId || entityId, createdBy: userId },
+            { isActive: false }
+          );
+          if (deleted) serverEntityId = deleted._id;
         }
       }
 

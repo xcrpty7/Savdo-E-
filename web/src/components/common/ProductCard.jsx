@@ -22,7 +22,9 @@ export default function ProductCard({ product }) {
       const res = await wishlistApi.toggleWishlist(product._id);
       const action = res.data.data.action;
       toast.success(action === 'added' ? 'Added to wishlist' : 'Removed from wishlist');
-    } catch (_) {}
+    } catch (_) {
+      toast.error('Failed to update wishlist');
+    }
   };
 
   const image = product.images?.[0]?.url || 'https://placehold.co/400x300?text=No+Image';

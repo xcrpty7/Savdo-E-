@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useT } from "@/hooks/useT";
 import { useLowStockCount } from "@/hooks/useProducts";
 import { useTheme } from "@/hooks/useTheme";
@@ -10,6 +11,7 @@ export default function AppLayout() {
   const t = useT();
   const lowStockCount = useLowStockCount();
   const { c } = useTheme();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     registerForPushNotifications().catch(() => {});
@@ -26,8 +28,8 @@ export default function AppLayout() {
           borderTopWidth: 1,
           elevation: 0,
           shadowOpacity: 0,
-          height: 62,
-          paddingBottom: 8,
+          height: 62 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           paddingTop: 4,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },

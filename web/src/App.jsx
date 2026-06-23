@@ -26,6 +26,8 @@ import Sales from './pages/Sales';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import Pricing from './pages/Pricing';
+import PaymentPage from './pages/PaymentPage';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
@@ -57,7 +59,7 @@ export default function App() {
     if (accessToken && !user) {
       fetchMe();
     }
-  }, [accessToken]);
+  }, [accessToken, user, fetchMe]);
 
   return (
     <>
@@ -106,6 +108,8 @@ export default function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="pricing" element={<Pricing />} />
+          <Route path="payment" element={<PaymentPage />} />
 
           {/* Admin-only routes */}
           <Route path="admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

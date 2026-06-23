@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      minlength: [8, 'Password must be at least 8 characters'],
+      minlength: [1, 'Password must be at least 1 character'],
       select: false,
     },
     googleId: {

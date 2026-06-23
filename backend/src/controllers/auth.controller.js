@@ -10,8 +10,15 @@ const COOKIE_OPTIONS = {
 };
 
 const register = asyncHandler(async (req, res) => {
-  const user = await authService.register(req.body);
-  res.status(201).json(new ApiResponse(201, { user }, 'Registration successful'));
+  const meta = {
+    userAgent: req.headers['user-agent'] || '',
+    ip: req.ip,
+  };
+  const { user, accessToken, refreshToken } = await authService.register(req.body, meta);
+  res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
+  res.status(201).json(
+    new ApiResponse(201, { user, accessToken, refreshToken }, 'Registration successful')
+  );
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -99,4 +106,16 @@ const googleAuth = asyncHandler(async (req, res) => {
   );
 });
 
-module.exports = { register, login, verifyEmail, refreshToken, logout, logoutAll, getMe, forgotPassword, resetPassword, googleAuth };
+const googleCallback = asyncHandler(async (req, res) => {
+  const meta = { userAgent: req.headers['user-agent'] || '', ip: req.ip };
+  const { code, redirectUri } = req.body;
+  const { user, accessToken, refreshToken } = await authService.googleCallback(code, redirectUri, meta);
+
+  res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
+
+  res.status(200).json(
+    new ApiResponse(200, { user, accessToken, refreshToken }, 'Google orqali kirish muvaffaqiyatli')
+  );
+});
+
+module.exports = { register, login, verifyEmail, refreshToken, logout, logoutAll, getMe, forgotPassword, resetPassword, googleAuth, googleCallback };

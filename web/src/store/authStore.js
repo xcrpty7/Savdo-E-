@@ -121,8 +121,12 @@ const useAuthStore = create(
         try {
           const res = await authApi.getMe();
           set({ user: res.data.data.user });
-        } catch (_) {
-          set({ user: null, accessToken: null, refreshToken: null });
+        } catch (err) {
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            set({ user: null, accessToken: null, refreshToken: null });
+          } else {
+            console.error('fetchMe failed:', err?.response?.data?.message || err.message);
+          }
         }
       },
 

@@ -1,22 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { GoogleLogin } from '@react-oauth/google';
 import useAuthStore from '../store/authStore';
-
-const getRules = (t) => [
-  { label: t('rule_length'), test: (p) => p.length >= 8 },
-  { label: t('rule_upper'),  test: (p) => /[A-Z]/.test(p) },
-  { label: t('rule_lower'),  test: (p) => /[a-z]/.test(p) },
-  { label: t('rule_number'), test: (p) => /\d/.test(p) },
-];
 
 export default function Register() {
   const { t } = useTranslation();
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [showPwd, setShowPwd] = useState(false);
-  const [pwdTouched, setPwdTouched] = useState(false);
   const [errors, setErrors] = useState({});
 
   const register    = useAuthStore((s) => s.register);
@@ -39,21 +31,16 @@ export default function Register() {
     } catch (_) {}
   };
 
-  const rules    = getRules(t);
-  const pwdValid = rules.every((r) => r.test(form.password));
-
   const validate = () => {
     const e = {};
     if (!form.name.trim())  e.name     = t('name_required');
     if (!form.email.trim()) e.email    = t('email_required');
     if (!form.password)     e.password = t('password_required');
-    else if (!pwdValid)     e.password = t('rule_length');
     return e;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setPwdTouched(true);
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
@@ -69,7 +56,6 @@ export default function Register() {
   const onChange = (field) => (e) => {
     setForm((p) => ({ ...p, [field]: e.target.value }));
     if (errors[field]) setErrors((p) => ({ ...p, [field]: '' }));
-    if (field === 'password') setPwdTouched(true);
   };
 
   const inputStyle = (err) => ({
@@ -254,7 +240,7 @@ export default function Register() {
                   autoComplete="new-password"
                   value={form.password}
                   onChange={onChange('password')}
-                  placeholder="Kamida 8 ta belgi"
+                  placeholder="Parol"
                   style={{ ...inputStyle(errors.password), paddingRight: 44 }}
                   onFocus={e => e.target.style.borderColor = '#12A87D'}
                   onBlur={e => e.target.style.borderColor = errors.password ? '#f87171' : 'rgba(255,255,255,0.1)'}
@@ -276,26 +262,6 @@ export default function Register() {
                 </button>
               </div>
               {errors.password && <p style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>{errors.password}</p>}
-
-              {(pwdTouched || form.password.length > 0) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 8px', marginTop: 10 }}>
-                  {rules.map((rule) => {
-                    const ok = rule.test(form.password);
-                    return (
-                      <div key={rule.label} style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        fontSize: 12, color: ok ? '#12A87D' : 'rgba(240,247,242,0.35)',
-                        transition: 'color 0.15s',
-                      }}>
-                        {ok
-                          ? <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
-                          : <XCircle size={12} style={{ flexShrink: 0 }} />}
-                        {rule.label}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {/* Button */}

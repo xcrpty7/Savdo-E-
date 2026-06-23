@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const https = require('https');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User.model');
 const RefreshToken = require('../models/RefreshToken.model');
@@ -11,44 +12,111 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const REFRESH_TOKEN_EXPIRES_DAYS = 7;
 
+function exchangeGoogleCode(code) {
+  return new Promise((resolve, reject) => {
+    const body = new URLSearchParams({
+      code,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      grant_type: 'authorization_code',
+    }).toString();
+
+    const req = https.request('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch { reject(new Error('Failed to parse token response')); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 /**
  * Register a new user and send email verification code
  */
-const register = async ({ name, email, password }) => {
+const register = async ({ name, email, password }, meta = {}) => {
   const existingUser = await User.findOne({ email });
   if (existingUser) {
     throw new ApiError(409, 'Email already registered');
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 daqiqa
+  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
   const user = await User.create({
     name,
     email,
     password,
-    emailVerificationCode: code,
-    emailVerificationExpires: expires,
+    isEmailVerified: false,
+    emailVerificationCode: verificationCode,
+    emailVerificationExpires: new Date(Date.now() + 15 * 60 * 1000),
   });
 
-  await sendEmail({
-    to: email,
-    subject: 'Savdo — Email tasdiqlash kodi',
+  sendEmail({
+    to: user.email,
+    subject: 'Savdo-E — Email tasdiqlash',
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:auto;">
         <h2 style="color:#1a1a2e;">Email tasdiqlash</h2>
-        <p>Salom, <strong>${name}</strong>!</p>
-        <p>Savdo ilovasiga kirish uchun quyidagi kodni kiriting:</p>
-        <div style="font-size:36px;font-weight:900;letter-spacing:10px;color:#6366f1;text-align:center;padding:24px;background:#f5f5ff;border-radius:12px;margin:20px 0;">
-          ${code}
-        </div>
+        <p>Salom, <strong>${user.name}</strong>!</p>
+        <p>Tasdiqlash kodi: <strong>${verificationCode}</strong></p>
         <p style="color:#888;font-size:13px;">Kod 15 daqiqa ichida amal qiladi.</p>
-        <p style="color:#888;font-size:13px;">Agar siz ro'yxatdan o'tmagan bo'lsangiz, bu xatni e'tiborsiz qoldiring.</p>
       </div>
     `,
+  }).catch((err) => console.error('Failed to send verification email:', err.message));
+
+  const tokenPayload = { id: user._id, name: user.name, role: user.role };
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshTokenValue = generateRefreshToken(tokenPayload);
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRES_DAYS);
+
+  await RefreshToken.create({
+    user: user._id,
+    token: refreshTokenValue,
+    expiresAt,
+    userAgent: meta.userAgent || '',
+    ip: meta.ip || '',
   });
 
-  return user;
+  return { user, accessToken, refreshToken: refreshTokenValue };
+};
+
+/**
+ * Register without email verification (no code)
+ */
+const registerSimple = async ({ name, email, password }, meta = {}) => {
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    throw new ApiError(409, 'Email already registered');
+  }
+
+  const user = await User.create({ name, email, password });
+
+  const tokenPayload = { id: user._id, name: user.name, role: user.role };
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshTokenValue = generateRefreshToken(tokenPayload);
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRES_DAYS);
+
+  await RefreshToken.create({
+    user: user._id,
+    token: refreshTokenValue,
+    expiresAt,
+    userAgent: meta.userAgent || '',
+    ip: meta.ip || '',
+  });
+
+  return { user, accessToken, refreshToken: refreshTokenValue };
 };
 
 /**
@@ -72,7 +140,7 @@ const verifyEmail = async ({ email, code }) => {
   user.emailVerificationExpires = undefined;
   await user.save({ validateBeforeSave: false });
 
-  const tokenPayload = { id: user._id, role: user.role };
+  const tokenPayload = { id: user._id, name: user.name, role: user.role };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshTokenValue = generateRefreshToken(tokenPayload);
 
@@ -103,7 +171,7 @@ const login = async ({ email, password }, meta = {}) => {
     throw new ApiError(403, 'Your account has been blocked');
   }
 
-  const tokenPayload = { id: user._id, role: user.role };
+  const tokenPayload = { id: user._id, name: user.name, role: user.role };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshTokenValue = generateRefreshToken(tokenPayload);
 
@@ -135,30 +203,30 @@ const refreshTokens = async (incomingRefreshToken) => {
     throw new ApiError(401, 'Invalid or expired refresh token');
   }
 
-  const storedToken = await RefreshToken.findOne({
-    token: incomingRefreshToken,
-    isRevoked: false,
-  });
+  const storedToken = await RefreshToken.findOneAndUpdate(
+    { token: incomingRefreshToken, isRevoked: false },
+    { isRevoked: true },
+    { new: true }
+  );
 
   if (!storedToken) {
+    const alreadyRevoked = await RefreshToken.findOne({ token: incomingRefreshToken });
+    if (alreadyRevoked) {
+      await RefreshToken.updateMany({ user: alreadyRevoked.user, isRevoked: false }, { isRevoked: true });
+    }
     throw new ApiError(401, 'Refresh token not found or already revoked');
   }
 
   if (storedToken.expiresAt < new Date()) {
-    await storedToken.deleteOne();
     throw new ApiError(401, 'Refresh token expired');
   }
-
-  // Revoke old token
-  storedToken.isRevoked = true;
-  await storedToken.save();
 
   const user = await User.findById(decoded.id);
   if (!user || user.isBlocked) {
     throw new ApiError(401, 'User not found or blocked');
   }
 
-  const tokenPayload = { id: user._id, role: user.role };
+  const tokenPayload = { id: user._id, name: user.name, role: user.role };
   const newAccessToken = generateAccessToken(tokenPayload);
   const newRefreshToken = generateRefreshToken(tokenPayload);
 
@@ -254,18 +322,34 @@ const resetPassword = async (rawToken, newPassword) => {
 };
 
 /**
- * Google OAuth — verify ID token, find or create user, return JWT tokens
+ * Google OAuth — verify ID token or exchange serverAuthCode, find or create user, return JWT tokens
  */
 const googleAuth = async (credential, meta = {}) => {
   let payload;
-  try {
+
+  const verifyWithAudiences = async (token) => {
+    const audiences = [
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_CLIENT_ID,
+    ].filter(Boolean);
     const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      idToken: token,
+      audience: audiences.length === 1 ? audiences[0] : audiences,
     });
-    payload = ticket.getPayload();
+    return ticket.getPayload();
+  };
+
+  // Try as ID token first (JWT) — accepts both Web and Android client audiences
+  try {
+    payload = await verifyWithAudiences(credential);
   } catch {
-    throw new ApiError(401, 'Google token yaroqsiz');
+    // If ID token verification fails, try exchanging as server auth code
+    try {
+      const tokens = await exchangeGoogleCode(credential);
+      payload = await verifyWithAudiences(tokens.id_token);
+    } catch {
+      throw new ApiError(401, 'Google token yaroqsiz');
+    }
   }
 
   const { sub: googleId, email, name, picture } = payload;
@@ -295,7 +379,7 @@ const googleAuth = async (credential, meta = {}) => {
     throw new ApiError(403, 'Hisobingiz bloklangan');
   }
 
-  const tokenPayload = { id: user._id, role: user.role };
+  const tokenPayload = { id: user._id, name: user.name, role: user.role };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshTokenValue = generateRefreshToken(tokenPayload);
 
@@ -316,4 +400,29 @@ const googleAuth = async (credential, meta = {}) => {
   return { user, accessToken, refreshToken: refreshTokenValue };
 };
 
-module.exports = { register, login, verifyEmail, refreshTokens, logout, logoutAll, forgotPassword, resetPassword, googleAuth };
+/**
+ * Google OAuth — exchange authorization code for tokens, then login/register user
+ */
+const googleCallback = async (code, redirectUri, meta = {}) => {
+  const tokenClient = new OAuth2Client({
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri,
+  });
+
+  let tokens;
+  try {
+    const res = await tokenClient.getToken(code);
+    tokens = res.tokens;
+  } catch {
+    throw new ApiError(400, 'Google code almashish xatolik');
+  }
+
+  if (!tokens.id_token) {
+    throw new ApiError(400, 'Google id_token olinmadi');
+  }
+
+  return googleAuth(tokens.id_token, meta);
+};
+
+module.exports = { register, login, verifyEmail, refreshTokens, logout, logoutAll, forgotPassword, resetPassword, googleAuth, googleCallback };

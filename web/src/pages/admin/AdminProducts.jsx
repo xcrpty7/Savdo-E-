@@ -76,6 +76,7 @@ export default function AdminProducts() {
       qc.invalidateQueries(['admin-products']);
       setModalOpen(false);
     } catch (_) {
+      toast.error('Failed to save product');
     } finally {
       setSaving(false);
     }

@@ -1,9 +1,11 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, Linking } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useT } from "@/hooks/useT";
 import { useTheme } from "@/hooks/useTheme";
 import { useSubscriptionStore, Plan } from "@/store/subscriptionStore";
+import { api } from "@/services/api";
+import { useState } from "react";
 
 type PlanKey = Plan;
 
@@ -20,10 +22,17 @@ const PLANS: PlanConfig[] = [
   { key: "biznes", price: "49 900", accentColor: "#7c3aed" },
 ];
 
+function openPayme(url: string) {
+  Linking.openURL(url).catch(() => {
+    Alert.alert("Xatolik", "Payme ilovasi ochilmadi. Brauzer orqali to'lang.");
+  });
+}
+
 export default function SubscriptionScreen() {
   const t = useT();
   const { c } = useTheme();
   const { plan: currentPlan, upgrade, expiresAt } = useSubscriptionStore();
+  const [paying, setPaying] = useState<string | null>(null);
 
   const featuresMap: Record<PlanKey, string[]> = {
     free:   t.subscription.freeFeatures,
@@ -37,18 +46,39 @@ export default function SubscriptionScreen() {
     biznes: t.subscription.biznes,
   };
 
+  async function handlePay(planKey: string) {
+    setPaying(planKey);
+    try {
+      const res = await api.post("/subscriptions/create-payment", { plan: planKey });
+      const data = res.data?.data ?? res.data;
+      Alert.alert(
+        "Payme orqali to'lov",
+        `Summa: ${data.amountUzs} so'm\n\nPayme ilovasi ochiladi.`,
+        [
+          { text: "Bekor qilish", style: "cancel" },
+          { text: "To'lash", onPress: () => openPayme(data.paymeUrl) },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert("Xatolik", e?.response?.data?.message || "To'lov yaratilmadi");
+    } finally {
+      setPaying(null);
+    }
+  }
+
   function handleUpgrade(plan: PlanConfig) {
     if (plan.key === "free") return;
     Alert.alert(
-      t.subscription.upgrade,
-      t.subscription.demoNote,
+      plan.key.toUpperCase(),
+      `Payme orqali to'lang (${plan.price} so'm/oy) yoki demo sinab ko'ring.`,
       [
-        { text: t.common.cancel, style: "cancel" },
+        { text: "Bekor qilish", style: "cancel" },
+        { text: "Payme", onPress: () => handlePay(plan.key) },
         {
-          text: "Faollashtirish (demo)",
+          text: "Demo (30 kun)",
           onPress: () => {
             upgrade(plan.key, 30);
-            Alert.alert(t.subscription.active, `${plan.key.toUpperCase()} 30 kun faollashtirildi`);
+            Alert.alert("Aktiv", `${plan.key.toUpperCase()} 30 kunga yoqildi (demo)`);
           },
         },
       ]
@@ -78,7 +108,6 @@ export default function SubscriptionScreen() {
           Hisob-kitob, hisobot va barcha imkoniyatlar — bir joyda
         </Text>
 
-        {/* Current plan pill */}
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, alignSelf: "flex-start", gap: 6 }}>
           <Ionicons name="checkmark-circle" size={14} color="#fff" />
           <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
@@ -105,11 +134,9 @@ export default function SubscriptionScreen() {
                 overflow: "hidden",
               }}
             >
-              {/* Top color bar */}
               <View style={{ height: 5, backgroundColor: plan.accentColor }} />
 
               <View style={{ padding: 20 }}>
-                {/* Plan name row */}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: plan.accentColor + "20", alignItems: "center", justifyContent: "center" }}>
@@ -127,7 +154,6 @@ export default function SubscriptionScreen() {
                     </View>
                   </View>
 
-                  {/* Badge */}
                   {isActive && (
                     <View style={{ backgroundColor: plan.accentColor, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
                       <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{t.subscription.active}</Text>
@@ -140,7 +166,6 @@ export default function SubscriptionScreen() {
                   )}
                 </View>
 
-                {/* Features */}
                 <View style={{ gap: 9, marginBottom: isActive || plan.key === "free" ? 0 : 16 }}>
                   {features.map((feature) => (
                     <View key={feature} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
@@ -152,7 +177,6 @@ export default function SubscriptionScreen() {
                   ))}
                 </View>
 
-                {/* Upgrade button */}
                 {!isActive && plan.key !== "free" && (
                   <TouchableOpacity
                     style={{
@@ -168,12 +192,13 @@ export default function SubscriptionScreen() {
                       shadowOpacity: 0.3,
                       shadowRadius: 8,
                       elevation: 4,
+                      opacity: paying === plan.key ? 0.6 : 1,
                     }}
                     onPress={() => handleUpgrade(plan)}
                   >
                     <Ionicons name="card" size={18} color="#fff" />
                     <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>
-                      {t.subscription.upgrade}
+                      {paying === plan.key ? "..." : t.subscription.upgrade}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -191,11 +216,10 @@ export default function SubscriptionScreen() {
           );
         })}
 
-        {/* Demo note */}
         <View style={{ backgroundColor: c.bgCard, borderWidth: 1, borderColor: c.border, borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
           <Ionicons name="information-circle" size={18} color={c.textMuted} style={{ marginTop: 1 }} />
           <Text style={{ color: c.textMuted, fontSize: 13, flex: 1, lineHeight: 19 }}>
-            {t.subscription.demoNote}
+            Payme orqali to'lang yoki 30 kun demo sinab ko'ring
           </Text>
         </View>
       </View>

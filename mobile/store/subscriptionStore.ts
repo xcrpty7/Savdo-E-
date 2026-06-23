@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { api } from "@/services/api";
 
 export type Plan = "free" | "pro" | "biznes";
 
@@ -24,10 +25,24 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   expiresAt: null,
 
   load: async () => {
+    try {
+      const res = await api.get("/subscriptions");
+      const sub = res.data?.data?.subscription;
+      if (sub) {
+        const expires = sub.expiresAt ? new Date(sub.expiresAt).getTime() : null;
+        if (expires && expires < Date.now()) {
+          set({ plan: "free", expiresAt: null });
+        } else {
+          set({ plan: sub.plan, expiresAt: expires });
+        }
+        await AsyncStorage.setItem("sub_plan", sub.plan);
+        if (expires) await AsyncStorage.setItem("sub_expires", String(expires));
+        return;
+      }
+    } catch {}
     const plan = ((await AsyncStorage.getItem("sub_plan")) as Plan) || "free";
     const expiresStr = await AsyncStorage.getItem("sub_expires");
     const expiresAt = expiresStr ? Number(expiresStr) : null;
-
     if (expiresAt && expiresAt < Date.now()) {
       await AsyncStorage.removeItem("sub_plan");
       await AsyncStorage.removeItem("sub_expires");

@@ -5,27 +5,28 @@ const ApiError = require('../utils/ApiError');
 const createSale = async (userId, saleData) => {
   const { product: productId, productName, quantity, sellPrice, buyPrice, unit, note, syncId, isFromOffline, createdAt } = saleData;
 
-  // Check for duplicate syncId (idempotent offline sync)
   if (syncId) {
     const existing = await Sale.findOne({ syncId });
     if (existing) return existing;
   }
 
-  // Check stock BEFORE creating the sale (don't deduct yet)
-  if (productId) {
-    const product = await Product.findById(productId);
-    if (product && product.stock < quantity) {
-      throw new ApiError(400, `Insufficient stock for "${product.name}". Available: ${product.stock}`);
-    }
-  }
-
-  // Compute totals explicitly (don't rely on hooks)
   const qty = Number(quantity);
   const sp = Number(sellPrice) || 0;
   const bp = Number(buyPrice) || 0;
 
-  // Save sale document first — if this fails, stock is untouched
-  const saleDoc = new Sale({
+  if (productId) {
+    const updated = await Product.findOneAndUpdate(
+      { _id: productId, stock: { $gte: qty } },
+      { $inc: { stock: -qty } },
+      { new: true }
+    );
+    if (!updated) {
+      const product = await Product.findById(productId);
+      throw new ApiError(400, `Insufficient stock for "${product?.name || productId}". Available: ${product?.stock ?? 0}`);
+    }
+  }
+
+  const saleDoc = await Sale.create({
     user: userId,
     product: productId || undefined,
     productName,
@@ -38,16 +39,10 @@ const createSale = async (userId, saleData) => {
     unit,
     note,
     syncId,
+    productId: syncId ? (saleData.productId || syncId) : undefined,
     isFromOffline: isFromOffline || false,
+    createdAt: createdAt ? new Date(createdAt) : undefined,
   });
-
-  if (createdAt) saleDoc.createdAt = new Date(createdAt);
-  await saleDoc.save();
-
-  // Deduct stock only after sale is successfully persisted
-  if (productId) {
-    await Product.findByIdAndUpdate(productId, { $inc: { stock: -quantity } });
-  }
 
   return saleDoc;
 };

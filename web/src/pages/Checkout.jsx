@@ -40,7 +40,8 @@ export default function Checkout() {
       resetCart();
       toast.success('Order placed successfully!');
       navigate(`/orders/${orderId}`);
-    } catch (_) {
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to place order');
     } finally {
       setIsLoading(false);
     }

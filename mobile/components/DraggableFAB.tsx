@@ -16,6 +16,8 @@ export function DraggableFAB({ onPress, color }: Props) {
   const pan = useRef(new Animated.ValueXY({ x: W - SIZE - MARGIN, y: H - SIZE - 100 })).current;
   const lastPos = useRef({ x: W - SIZE - MARGIN, y: H - SIZE - 100 });
   const hasDragged = useRef(false);
+  const onPressRef = useRef(onPress);
+  onPressRef.current = onPress;
 
   const panResponder = useRef(
     PanResponder.create({
@@ -42,7 +44,7 @@ export function DraggableFAB({ onPress, color }: Props) {
         pan.flattenOffset();
 
         if (!hasDragged.current) {
-          onPress();
+          onPressRef.current();
           return;
         }
 

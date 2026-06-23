@@ -30,6 +30,14 @@ const getProducts = async (userId, queryParams = {}) => {
   };
 };
 
+const getProductBySlug = async (slug, userId) => {
+  const filter = { slug };
+  if (userId) filter.owner = userId;
+  const product = await Product.findOne(filter).populate('reviews.user', 'name avatar');
+  if (!product) throw new ApiError(404, 'Product not found');
+  return product;
+};
+
 const getProductById = async (id, userId) => {
   const filter = { _id: id };
   if (userId) filter.owner = userId;
@@ -88,6 +96,7 @@ const getCategories = async (userId) => {
 module.exports = {
   getProducts,
   getProductById,
+  getProductBySlug,
   createProduct,
   updateProduct,
   deleteProduct,

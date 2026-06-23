@@ -37,6 +37,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token: null, refreshToken: null });
     mmkv.delete("token").catch(() => {});
     mmkv.delete("refreshToken").catch(() => {});
+    mmkv.delete("emailHash").catch(() => {});
+    mmkv.delete("emailToken").catch(() => {});
+    mmkv.delete("emailRefresh").catch(() => {});
   },
 
   saveEmailCredentials: async (email, password, token, refresh) => {
@@ -56,4 +59,5 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (stored !== hash) return null;
     return (await mmkv.getString("emailToken")) ?? null;
   },
+
 }));

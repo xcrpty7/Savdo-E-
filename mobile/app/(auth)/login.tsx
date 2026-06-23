@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { useLangStore } from "@/store/langStore";
 import { useAuthStore } from "@/store/authStore";
 import { useT } from "@/hooks/useT";
@@ -10,14 +11,19 @@ import { useTheme } from "@/hooks/useTheme";
 import { light } from "@/theme/colors";
 import { Lang } from "@/i18n";
 
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? "",
+  offlineAccess: true,
+});
+
 const LANGS: { code: Lang; label: string; flag: string }[] = [
   { code: "uz", label: "UZ", flag: "🇺🇿" },
   { code: "ru", label: "RU", flag: "🇷🇺" },
   { code: "en", label: "EN", flag: "🇬🇧" },
 ];
 
-type LoginTab = "phone" | "email";
 type EmailMode = "signin" | "register";
+type LoginTab = "email" | "phone";
 
 function Field({
   icon, placeholder, value, onChangeText, secure, onToggleSecure, showSecure, keyboardType, autoCapitalize, c,
@@ -57,7 +63,7 @@ function Field({
 }
 
 export default function LoginScreen() {
-  const [tab, setTab] = useState<LoginTab>("phone");
+  const [tab, setTab] = useState<LoginTab>("email");
   const [emailMode, setEmailMode] = useState<EmailMode>("signin");
 
   const [phone, setPhone] = useState("");
@@ -74,31 +80,41 @@ export default function LoginScreen() {
   const t = useT();
   const { c } = useTheme();
 
-  const pwdChecks = [
-    { key: "len",   label: "Kamida 8 ta belgi", pass: password.length >= 8 },
-    { key: "lower", label: "Kichik harf (a-z)",  pass: /[a-z]/.test(password) },
-    { key: "upper", label: "Katta harf (A-Z)",   pass: /[A-Z]/.test(password) },
-    { key: "digit", label: "Raqam (0-9)",         pass: /[0-9]/.test(password) },
-  ];
-  const pwdAllGood  = pwdChecks.every((ch) => ch.pass);
-  const pwdAnyTried = password.length > 0;
+  async function handleGoogleSignIn() {
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const res = await GoogleSignin.signIn();
+      if (res.type === "cancelled") return;
+      const user = res.data;
+      const code = user.serverAuthCode || user.idToken;
+      if (!code) { Alert.alert("Xatolik", "Google kodi olinmadi"); setLoading(false); return; }
+      const apiRes = await api.post("/auth/google", { credential: code });
+      const data = apiRes.data?.data ?? apiRes.data;
+      await setToken(data.accessToken, data.refreshToken);
+    } catch (e: any) {
+      if (e?.code === statusCodes.SIGN_IN_CANCELLED) return;
+      if (e?.code === statusCodes.IN_PROGRESS) return;
+      const msg = e?.response?.data?.message || "Google bilan kirish xatolik";
+      Alert.alert("Xatolik", msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const isPhoneValid    = phone.length >= 9;
   const isSignInValid   = email.includes("@") && password.length >= 1;
-  const isRegisterValid = name.trim().length >= 2 && email.includes("@") && pwdAllGood && confirmPwd === password;
+  const isRegisterValid = name.trim().length >= 2 && email.includes("@") && password.length >= 1 && confirmPwd === password;
 
   function submitBg() {
     const valid = emailMode === "signin" ? isSignInValid : isRegisterValid;
     if (loading) return c.bgMuted;
     if (valid) return c.primary;
-    if (emailMode === "register" && pwdAnyTried && !pwdAllGood) return c.danger;
     return c.bgMuted;
   }
   function submitTextColor() {
     const valid = emailMode === "signin" ? isSignInValid : isRegisterValid;
-    return (valid || (emailMode === "register" && pwdAnyTried && !pwdAllGood)) && !loading
-      ? "#fff"
-      : c.textMuted;
+    return valid && !loading ? "#fff" : c.textMuted;
   }
 
   async function handlePhoneNext() {
@@ -123,7 +139,8 @@ export default function LoginScreen() {
         return;
       }
       const res = await api.post("/auth/login", { email: email.toLowerCase(), password });
-      await saveEmailCredentials(email.toLowerCase(), password, res.data.accessToken, res.data.refreshToken);
+      const data = res.data?.data ?? res.data;
+      await saveEmailCredentials(email.toLowerCase(), password, data.accessToken, data.refreshToken);
     } catch (e: any) {
       if (!e?.response) {
         const cached = await verifyEmailOffline(email, password);
@@ -141,19 +158,19 @@ export default function LoginScreen() {
     if (!isRegisterValid) return;
     setLoading(true);
     try {
-      await api.post("/auth/register", {
+      const res = await api.post("/auth/register", {
         name: name.trim(),
         email: email.toLowerCase(),
         password,
       });
-      router.push({ pathname: "/verify-email", params: { email: email.toLowerCase() } });
+      const data = res.data?.data ?? res.data;
+      await saveEmailCredentials(email.toLowerCase(), password, data.accessToken, data.refreshToken);
     } catch (e: any) {
-      if (!e?.response) {
-        router.push({ pathname: "/verify-email", params: { email: email.toLowerCase() } });
-      } else if (e?.response?.status === 409) {
+      if (e?.response?.status === 409) {
         Alert.alert(t.common.error, t.auth.emailExists);
       } else {
-        Alert.alert(t.common.error, t.auth.wrongPassword);
+        const msg = e?.response?.data?.message || "Ro'yxatdan o'tishda xatolik";
+        Alert.alert(t.common.error, msg);
       }
     } finally {
       setLoading(false);
@@ -204,21 +221,7 @@ export default function LoginScreen() {
         {/* ── Bottom card ── */}
         <View style={{ backgroundColor: c.bgCard, borderTopLeftRadius: 34, borderTopRightRadius: 34, paddingHorizontal: 22, paddingTop: 26, paddingBottom: 48, flex: 1 }}>
 
-          {/* Phone / Email tab */}
-          <View style={{ flexDirection: "row", backgroundColor: c.bgMuted, borderRadius: 13, padding: 3, marginBottom: 20 }}>
-            {(["phone", "email"] as LoginTab[]).map((tb) => (
-              <TouchableOpacity
-                key={tb}
-                onPress={() => setTab(tb)}
-                style={{ flex: 1, paddingVertical: 9, borderRadius: 11, backgroundColor: tab === tb ? c.primary : "transparent", alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
-              >
-                <Ionicons name={tb === "phone" ? "call" : "mail"} size={14} color={tab === tb ? "#fff" : c.textSub} />
-                <Text style={{ color: tab === tb ? "#fff" : c.textSub, fontWeight: "700", fontSize: 13 }}>
-                  {tb === "phone" ? t.auth.byPhone : t.auth.byEmail}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Phone tab removed — email-only, no OTP */}
 
           {/* ─── PHONE TAB ─── */}
           {tab === "phone" && (
@@ -316,7 +319,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Register — confirm password + requirements */}
+              {/* Register — confirm password */}
               {emailMode === "register" && (
                 <>
                   <Field
@@ -329,28 +332,6 @@ export default function LoginScreen() {
                     onToggleSecure={() => setShowConfirm(!showConfirm)}
                     c={c}
                   />
-
-                  {/* Password requirements checklist */}
-                  <View style={{ backgroundColor: c.bg, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1.5, borderColor: pwdAnyTried && !pwdAllGood ? c.danger + "55" : c.border }}>
-                    <Text style={{ color: c.textMuted, fontSize: 11, fontWeight: "700", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      Parol talablari
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      {pwdChecks.map((ch) => (
-                        <View key={ch.key} style={{ width: "47%", flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Ionicons
-                            name={ch.pass ? "checkmark-circle" : "close-circle"}
-                            size={15}
-                            color={ch.pass ? c.primary : c.danger}
-                          />
-                          <Text style={{ color: ch.pass ? c.primary : c.danger, fontSize: 12, fontWeight: "600", flex: 1 }}>
-                            {ch.label}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-
                   {confirmPwd.length > 0 && confirmPwd !== password && (
                     <Text style={{ color: c.danger, fontSize: 12, marginTop: -6, marginBottom: 8 }}>
                       Parollar mos kelmayapti
@@ -395,6 +376,22 @@ export default function LoginScreen() {
                 <Text style={{ color: c.textMuted, marginHorizontal: 12, fontSize: 12 }}>{t.auth.or}</Text>
                 <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
               </View>
+
+              {/* Google button */}
+              <TouchableOpacity
+                style={{ backgroundColor: c.bg, borderRadius: 14, height: 50, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, borderWidth: 1.5, borderColor: c.border, marginBottom: 10 }}
+                onPress={handleGoogleSignIn}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={c.primary} />
+                ) : (
+                  <Ionicons name="logo-google" size={18} color={c.text} />
+                )}
+                <Text style={{ color: c.text, fontWeight: "700", fontSize: 14 }}>
+                  {loading ? t.auth.checking : "Google orqali kirish"}
+                </Text>
+              </TouchableOpacity>
 
               {/* Demo button */}
               <TouchableOpacity
