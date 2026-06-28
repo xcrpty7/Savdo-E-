@@ -30,9 +30,9 @@ const connectDB = async () => {
   let delay = 3000;
   let attempt = 0;
 
-  // USE_MEMORY_DB=true (dev only) → in-process MongoDB via mongodb-memory-server.
-  // Real mongod o'rnatish kerakmas. Production'da hech qachon ishlatma.
-  if (process.env.USE_MEMORY_DB === 'true' && process.env.NODE_ENV !== 'production') {
+  // USE_MEMORY_DB=true → in-process MongoDB via mongodb-memory-server.
+  // Real MongoDB o'rnatish kerakmas. Faqat MONGO_URI berilgan bo'lsa real DB ishlatiladi.
+  if (process.env.USE_MEMORY_DB === 'true' && !process.env.MONGO_URI) {
     const { MongoMemoryServer } = require('mongodb-memory-server');
     const mem = await MongoMemoryServer.create();
     process.env.MONGO_URI = mem.getUri('savdo_db');
