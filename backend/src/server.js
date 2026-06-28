@@ -86,19 +86,25 @@ app.get('/health', (req, res) => {
 app.use('/api/v1', routes);
 
 // ── Static Frontend (production only) ─────────────────────────────────────
+// ✅ Agar dist papkalar mavjud bo'lsa, frontend-ni server qiladi
+//    Render'da faqat backend kodi bor — static papkalar yo'q, shuning uchun
+//    bu blok skipp qilinadi va API-only rejim ishlaydi.
 
 if (process.env.NODE_ENV === 'production') {
+  const fs = require('fs');
   const webDist   = path.join(__dirname, '../../web/dist');
   const adminDist = path.join(__dirname, '../../web/admin/dist');
 
-  // Admin panel — /admin/*
-  app.use('/admin', express.static(adminDist));
-  app.get('/admin', (req, res) => res.redirect('/admin/'));
-  app.get('/admin/*', (req, res) => res.sendFile(path.join(adminDist, 'index.html')));
+  if (fs.existsSync(adminDist)) {
+    app.use('/admin', express.static(adminDist));
+    app.get('/admin', (req, res) => res.redirect('/admin/'));
+    app.get('/admin/*', (req, res) => res.sendFile(path.join(adminDist, 'index.html')));
+  }
 
-  // Web frontend — /*
-  app.use(express.static(webDist));
-  app.get('*', (req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  if (fs.existsSync(webDist)) {
+    app.use(express.static(webDist));
+    app.get('*', (req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  }
 }
 
 // ── 404 Handler (API only) ─────────────────────────────────────────────────
