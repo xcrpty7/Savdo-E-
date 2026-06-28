@@ -5,19 +5,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50:  '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+        savdo: {
+          50:  '#F5F8F3',
+          100: '#EAF3E5',
+          200: '#C6DEC0',
+          300: '#7AAA7C',
+          400: '#44AB4C',
+          500: '#2D8B35',
+          600: '#1D5E24',
+          700: '#0C1410',
+          800: '#162018',
+          900: '#0C1410',
         },
-        // POS / SAVDO dark theme
         pos: {
           bg:      '#0F172A',
           card:    '#1E293B',
@@ -30,6 +29,10 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: {
+        '2xl': '16px',
+        '3xl': '20px',
       },
     },
   },

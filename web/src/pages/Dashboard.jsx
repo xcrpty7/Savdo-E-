@@ -12,11 +12,11 @@ export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
   const isDark = useThemeStore((s) => s.isDark);
 
-  const card = isDark ? 'rgba(17,41,32,0.9)' : '#ffffff';
-  const bd   = isDark ? 'rgba(255,255,255,0.07)' : '#E8F4EF';
-  const tx1  = isDark ? '#e0f2ec' : '#0D1F18';
-  const tx2  = isDark ? 'rgba(224,242,236,0.55)' : '#4A6358';
-  const tx3  = isDark ? 'rgba(224,242,236,0.35)' : '#9BB5AA';
+  const card = isDark ? '#162018' : '#ffffff';
+  const bd   = isDark ? 'rgba(36,62,40,0.5)' : 'rgba(198,222,192,0.5)';
+  const tx1  = isDark ? '#DBF0DB' : '#182A1A';
+  const tx2  = isDark ? 'rgba(219,240,219,0.55)' : 'rgba(60,107,66,0.65)';
+  const tx3  = isDark ? 'rgba(219,240,219,0.35)' : 'rgba(122,170,124,0.5)';
 
   const locale = i18n.language.startsWith('uz') ? 'uz-UZ'
     : i18n.language.startsWith('ru') ? 'ru-RU' : 'en-US';
@@ -31,9 +31,9 @@ export default function Dashboard() {
   });
 
   const accents = {
-    green: { bg: 'rgba(18,168,125,0.12)', icon: '#12A87D', glow: 'rgba(18,168,125,0.2)' },
+    green: { bg: 'rgba(84,188,90,0.12)', icon: '#54BC5A', glow: 'rgba(84,188,90,0.2)' },
     gold:  { bg: 'rgba(201,147,58,0.12)', icon: '#C9933A', glow: 'rgba(201,147,58,0.2)' },
-    blue:  { bg: 'rgba(99,102,241,0.12)', icon: '#818cf8', glow: 'rgba(99,102,241,0.15)' },
+    blue:  { bg: 'rgba(68,171,76,0.12)', icon: '#44AB4C', glow: 'rgba(68,171,76,0.15)' },
   };
 
   const { data: summaryData, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useQuery({
@@ -72,9 +72,9 @@ export default function Dashboard() {
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '10px 20px', borderRadius: 14,
-            background: 'linear-gradient(135deg,#0A5C45,#0E7A5C)',
+            background: 'linear-gradient(135deg,#2D8B35,#44AB4C)',
             color: '#fff', textDecoration: 'none', fontSize: 13, fontWeight: 700,
-            boxShadow: '0 6px 20px rgba(10,92,69,0.35)',
+            boxShadow: '0 6px 20px rgba(45,139,53,0.35)',
             flexShrink: 0, whiteSpace: 'nowrap',
           }}>
           <PlusCircle size={15} />
@@ -96,10 +96,10 @@ export default function Dashboard() {
           <div style={{ gridColumn: 'span 3', ...cardStyle, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <AlertCircle size={28} color="#f87171" />
             <p style={{ fontSize: 13, fontWeight: 600, color: '#f87171', margin: 0 }}>{t('error_loading')}</p>
-            <button onClick={() => refetchSummary()} style={{ fontSize: 13, fontWeight: 600, color: '#12A87D', background: 'none', border: 'none', cursor: 'pointer' }}>{t('retry')}</button>
+            <button onClick={() => refetchSummary()} style={{ fontSize: 13, fontWeight: 600, color: '#54BC5A', background: 'none', border: 'none', cursor: 'pointer' }}>{t('retry')}</button>
           </div>
         ) : [
-          { label: t('today_sales'),   value: todayStats.salesCount ?? 0, Icon: ShoppingCart, a: 'blue' },
+          { label: t('today_sales'),   value: todayStats.salesCount ?? 0, Icon: ShoppingCart, a: 'green' },
           { label: t('today_revenue'), value: fmt(todayStats.totalRevenue), Icon: DollarSign, a: 'gold' },
           { label: t('today_profit'),  value: fmt(todayStats.totalProfit),  Icon: TrendingUp,  a: 'green' },
         ].map(({ label, value, Icon, a }) => {
@@ -157,9 +157,9 @@ export default function Dashboard() {
       <div style={{ ...cardStyle, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: `1px solid ${bd}` }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: tx1 }}>{t('recent_sales')}</span>
-          <Link to="/sales" style={{ fontSize: 12, fontWeight: 600, color: '#12A87D', textDecoration: 'none' }}
+          <Link to="/sales" style={{ fontSize: 12, fontWeight: 600, color: '#54BC5A', textDecoration: 'none' }}
             onMouseEnter={e => e.target.style.color = '#C9933A'}
-            onMouseLeave={e => e.target.style.color = '#12A87D'}>
+            onMouseLeave={e => e.target.style.color = '#54BC5A'}>
             {t('view_all')} →
           </Link>
         </div>
@@ -176,7 +176,7 @@ export default function Dashboard() {
           <div style={{ padding: '40px 20px', textAlign: 'center' }}>
             <AlertCircle size={26} color="#f87171" style={{ margin: '0 auto 8px' }} />
             <p style={{ fontSize: 13, fontWeight: 600, color: '#f87171', margin: '0 0 8px' }}>{t('error_loading')}</p>
-            <button onClick={() => refetchSales()} style={{ fontSize: 13, fontWeight: 600, color: '#12A87D', background: 'none', border: 'none', cursor: 'pointer' }}>{t('retry')}</button>
+            <button onClick={() => refetchSales()} style={{ fontSize: 13, fontWeight: 600, color: '#54BC5A', background: 'none', border: 'none', cursor: 'pointer' }}>{t('retry')}</button>
           </div>
         ) : recentSales.length === 0 ? (
           <div style={{ padding: '48px 20px', textAlign: 'center' }}>
@@ -186,9 +186,9 @@ export default function Dashboard() {
             <p style={{ fontSize: 13, color: tx3, margin: '0 0 14px' }}>{t('no_sales_today')}</p>
             <Link to="/sales" style={{
               display: 'inline-block', padding: '8px 18px', borderRadius: 10,
-              background: isDark ? 'rgba(10,92,69,0.2)' : '#F0FAF7',
-              color: '#12A87D', textDecoration: 'none', fontSize: 12, fontWeight: 700,
-              border: `1px solid ${isDark ? 'rgba(10,92,69,0.3)' : '#D8EAE4'}`,
+              background: isDark ? 'rgba(45,139,53,0.2)' : '#EAF3E5',
+              color: '#54BC5A', textDecoration: 'none', fontSize: 12, fontWeight: 700,
+              border: `1px solid ${isDark ? 'rgba(45,139,53,0.3)' : '#C6DEC0'}`,
             }}>
               + {t('new_sale')}
             </Link>
@@ -205,8 +205,8 @@ export default function Dashboard() {
             onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.02)' : '#F8FCF9'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(18,168,125,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <ShoppingCart size={14} color="#12A87D" />
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(84,188,90,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ShoppingCart size={14} color="#54BC5A" />
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 600, color: tx1, margin: '0 0 2px' }}>
@@ -218,7 +218,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#12A87D', margin: '0 0 2px' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#54BC5A', margin: '0 0 2px' }}>
                   +{Number(sale.profit || 0).toLocaleString(locale)} {t('currency')}
                 </p>
                 <p style={{ fontSize: 11, color: tx3, margin: 0 }}>

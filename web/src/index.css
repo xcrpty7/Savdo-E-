@@ -4,50 +4,51 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── LANDING PAGE VARIABLES ─────────────────────── */
+/* ── SAVDO MOBILE-INSPIRED THEME ────────────────── */
 :root {
-  --green-dark: #0a1f12;
-  --green-bright: #22c55e;
+  --green-dark: #0C1410;
+  --green-bright: #54BC5A;
   --gold: #d4a853;
-  --text-main: #f0f7f2;
-  --text-muted: rgba(240, 247, 242, 0.55);
+  --text-main: #DBF0DB;
+  --text-muted: rgba(219, 240, 219, 0.55);
   --grid-line: rgba(255, 255, 255, 0.04);
-  --brand: #0A5C45;
-  --brand-lt: #12A87D;
-  --bg-page: #0a1f12;
-  --bg-surface: #0d2418;
-  --bg-card: #112920;
-  --bg-muted: #091a0f;
-  --bd: rgba(255, 255, 255, 0.08);
-  --tx-1: #f0f7f2;
-  --tx-2: rgba(240, 247, 242, 0.6);
-  --tx-3: rgba(240, 247, 242, 0.35);
+  --brand: #2D8B35;
+  --brand-lt: #44AB4C;
+  --bg-page: #0C1410;
+  --bg-surface: #162018;
+  --bg-card: #162018;
+  --bg-muted: #1C2C1E;
+  --bd: rgba(36, 62, 40, 0.5);
+  --tx-1: #DBF0DB;
+  --tx-2: rgba(219, 240, 219, 0.6);
+  --tx-3: rgba(219, 240, 219, 0.35);
 }
 
 html.dark {
-  --green-dark: #0a1f12;
-  --bg-page: #0a1f12;
-  --bg-surface: #0d2418;
-  --bg-card: #112920;
-  --bg-muted: #091a0f;
-  --bd: rgba(255, 255, 255, 0.08);
-  --tx-1: #f0f7f2;
-  --tx-2: rgba(240, 247, 242, 0.6);
-  --tx-3: rgba(240, 247, 242, 0.35);
-  --brand: #12A87D;
+  --green-dark: #0C1410;
+  --bg-page: #0C1410;
+  --bg-surface: #162018;
+  --bg-card: #162018;
+  --bg-muted: #1C2C1E;
+  --bd: rgba(36, 62, 40, 0.5);
+  --tx-1: #DBF0DB;
+  --tx-2: rgba(219, 240, 219, 0.6);
+  --tx-3: rgba(219, 240, 219, 0.35);
+  --brand: #54BC5A;
+  --brand-lt: #74CB78;
 }
 
 html:not(.dark) {
-  --bg-page: #f0f7f4;
-  --bg-surface: #e8f4ef;
-  --bg-card: #ffffff;
-  --bg-muted: #f5faf7;
-  --bd: rgba(10, 92, 69, 0.14);
-  --tx-1: #0D1F18;
-  --tx-2: rgba(13, 31, 24, 0.65);
-  --tx-3: rgba(13, 31, 24, 0.38);
-  --brand: #0A5C45;
-  --brand-lt: #0E7A5C;
+  --bg-page: #F5F8F3;
+  --bg-surface: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-muted: #EAF3E5;
+  --bd: rgba(198, 222, 192, 0.5);
+  --tx-1: #182A1A;
+  --tx-2: rgba(60, 107, 66, 0.65);
+  --tx-3: rgba(122, 170, 124, 0.5);
+  --brand: #2D8B35;
+  --brand-lt: #44AB4C;
   --gold: #C9933A;
 }
 
@@ -179,7 +180,7 @@ body.landing {
   }
 
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+    @apply btn bg-savdo-500 text-white hover:bg-savdo-600 focus:ring-savdo-400;
   }
 
   .btn-secondary {
@@ -195,7 +196,7 @@ body.landing {
   }
 
   .input {
-    @apply w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm placeholder-gray-400 transition focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500;
+    @apply w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm placeholder-gray-400 transition focus:border-savdo-500 focus:outline-none focus:ring-1 focus:ring-savdo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500;
   }
 
   .card {

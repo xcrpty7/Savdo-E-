@@ -159,7 +159,8 @@ export default function LoginScreen() {
         if (cached) { await setToken(cached, ""); return; }
         Alert.alert(t.common.error, t.auth.noNetworkLogin);
       } else {
-        Alert.alert(t.common.error, t.auth.wrongPassword);
+        const msg = e?.response?.data?.message || t.auth.wrongPassword;
+        Alert.alert(t.common.error, msg);
       }
     } finally {
       setLoading(false);
